@@ -130,9 +130,9 @@ test "lockfile package ordering is deterministic by name" {
 }
 
 test "resolve github ref to commit" {
-	spec := parse_source_reference("github:psf/requests@main")
+	spec := parse_source_reference("github:kujolang/kujo@main")
 	assert_equal(spec["ok"], true)
-	resolved := resolve_dependency("requests", spec)
+	resolved := resolve_dependency("kujo", spec)
 	assert_equal(resolved["ok"], true)
 	assert_equal(resolved["resolved"]["resolved_ref"], "main")
 	assert_true(len(resolved["resolved"]["resolved_commit"]) > 6)
