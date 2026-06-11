@@ -1,0 +1,44 @@
+[package]
+name = "kennel"
+version = "0.1.0"
+description = "Production-focused package manager for Kujo projects with deterministic dependency operations and hosted-registry workflows."
+license = "MIT"
+authors = ["Kujolang <contact@kujolang.ai>"]
+homepage = "https://github.com/kujolang/kennel"
+repository = "https://github.com/kujolang/kennel"
+documentation = "https://github.com/kujolang/kennel/tree/main/docs"
+keywords = ["kujo", "package-manager", "dependencies", "registry", "lockfile"]
+categories = ["developer-tools"]
+readme = "README.md"
+
+[package.status]
+stage = "experimental"
+stability = "early"
+public_api = true
+notes = "Core workflows are production-focused; compatibility and policy surfaces continue to evolve."
+
+[kujo]
+minimum_version = "0.1.0"
+entry = "kennel.kujo"
+sources = [".", "src"]
+includes = ["README.md", "docs", "tests", "scripts", "examples"]
+excludes = [".git", ".kennel_tmp", "dist", "build", "node_modules"]
+
+[build]
+command = ""
+output = "dist"
+artifacts = []
+
+[dependencies]
+
+[dev-dependencies]
+
+[scripts]
+test = "bash tests/run_tests.sh"
+verify = "bash scripts/verify-all.sh"
+verify-core = "bash scripts/verify-all.sh core"
+
+[package.exports]
+cli = "kennel.kujo"
+validator = "validator.kujo"
+manifest = "manifest.kujo"

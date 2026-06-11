@@ -1,0 +1,51 @@
+from dependency_spec import source_ref_from_dependency_entry
+from manifest import dependency_map, manifest_package_name, manifest_package_version
+
+func validate_manifest(manifest_obj) {
+	errors := []
+	warnings := []
+	name := trim(to_string(manifest_package_name(manifest_obj)))
+	version := trim(to_string(manifest_package_version(manifest_obj)))
+	if name == "" {
+		errors := push(errors, "[package].name is required")
+	}
+	if version == "" {
+		errors := push(errors, "[package].version is required")
+	}
+	deps := dependency_map(manifest_obj)
+	for dep_name in keys(deps) {
+		parsed := source_ref_from_dependency_entry(dep_name, deps[dep_name])
+		if parsed["ok"] == false {
+			errors := push(errors, parsed["error"])
+			continue
+		}
+		if parsed["kind"] != "path" {
+			requested := trim(to_string(parsed["requested"]))
+			if requested == "" {
+				warnings := push(warnings, "Dependency `" + dep_name + "` does not pin a ref/tag/version/commit. It will track default branch state.")
+			}
+		}
+	}
+	return {
+		"ok": len(errors) == 0,
+		"errors": errors,
+		"warnings": warnings
+	}
+}
+
+func print_validation_report(report) {
+	if report["ok"] {
+		print("kennel.toml is valid")
+	} else {
+		print("kennel.toml has validation errors")
+	}
+	for issue in report["errors"] {
+		print("ERROR: " + issue)
+	}
+	for issue in report["warnings"] {
+		print("WARNING: " + issue)
+	}
+}
+
+export validate_manifest := validate_manifest
+export print_validation_report := print_validation_report

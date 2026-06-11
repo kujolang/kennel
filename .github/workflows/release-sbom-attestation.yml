@@ -1,0 +1,46 @@
+name: release-sbom-attestation
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  supply-chain-provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout kennel
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Generate SBOM (SPDX JSON)
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: spdx-json
+          output-file: artifacts/security/sbom.spdx.json
+
+      - name: Generate integrity manifest
+        run: |
+          set -euo pipefail
+          bash ./scripts/generate-integrity-manifest.sh artifacts/security
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kennel-supply-chain-security-artifacts
+          path: artifacts/security
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attest SBOM provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+        with:
+          subject-path: artifacts/security/sbom.spdx.json

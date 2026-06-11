@@ -1,0 +1,15 @@
+{
+  "name": "mcp",
+  "description": "Model Context Protocol package for Kujo.",
+  "homepage": "https://github.com/kujolang/mcp",
+  "repository": "https://github.com/kujolang/mcp",
+  "latest": "v0.1.0",
+  "versions": [
+    {
+      "version": "v0.1.0",
+      "source": "github:kujolang/mcp",
+      "ref": "v0.1.0",
+      "published_at": "2026-05-19T00:00:00Z"
+    }
+  ]
+}

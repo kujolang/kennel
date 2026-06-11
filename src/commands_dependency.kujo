@@ -1,0 +1,459 @@
+from cli import flag_value, has_flag, positional
+from commands_shared import capture_project_state, enforce_source_policy, ensure_project_manifest, find_entry_by_name, index_lookup_paths, load_registry_package_metadata, load_static_index, persist_project_state, print_supported_source_guidance, rebuild_lockfile_from_manifest, require_identifier, resolve_and_install_dependency, resolve_name_based_source, resolution_policy_from_manifest, source_policy_from_manifest, source_policy_with_cli_overrides, trust_policy_from_manifest, update_should_skip
+from dependency_spec import dependency_entry_from_source, parse_source_reference, source_ref_from_dependency_entry
+from future_resolvers import resolve_registry_index_name, search_registry_index, verify_package_signature
+from installer import install_locked_package, remove_install_path
+from lockfile import empty_lockfile, load_lockfile, remove_package, save_lockfile
+from manifest import default_manifest, dependency_exists, dependency_map, infer_project_name, manifest_path, remove_dependency, save_manifest, set_dependency
+from resolver import resolve_dependency
+from src.utils import dict_get_or
+from validator import print_validation_report, validate_manifest
+
+func command_init(cwd, parsed_cli) {
+	project_name := trim(to_string(flag_value(parsed_cli, "--name", "")))
+	if project_name == "" {
+		project_name := infer_project_name(cwd)
+	}
+	project_name = require_identifier(project_name, "Project name")
+	path := manifest_path(cwd)
+	force := has_flag(parsed_cli, "--force")
+	if file_exists(path) && force == false {
+		print("kennel.toml already exists. Use `kennel init --force` to overwrite.")
+		return
+	}
+	manifest_obj := default_manifest(project_name)
+	save_manifest(cwd, manifest_obj)
+	print("Kennel initialized kennel.toml")
+	print("Kennel defaults are production-oriented: deterministic lockfiles, explicit sources, and trust policy support.")
+}
+
+func command_new(cwd, parsed_cli) {
+	project_name := trim(to_string(positional(parsed_cli, 0, "")))
+	if project_name == "" {
+		print("Usage: kennel new <project-name> [--force]")
+		exit(1)
+	}
+
+	project_name = require_identifier(project_name, "Project name")
+	project_dir := cwd + "/" + project_name
+	force := has_flag(parsed_cli, "--force")
+
+	if path_exists(project_dir) && path_is_dir(project_dir) == false {
+		print("Path exists and is not a directory: " + project_dir)
+		exit(1)
+	}
+
+	if path_exists(project_dir) && force == false {
+		print("Project directory already exists. Use `kennel new " + project_name + " --force` to overwrite scaffold files.")
+		exit(1)
+	}
+
+	if path_exists(project_dir) == false {
+		create_dir(project_dir)
+	}
+
+	create_dir(project_dir + "/src")
+	create_dir(project_dir + "/tests")
+
+	manifest_obj := default_manifest(project_name)
+	save_manifest(project_dir, manifest_obj)
+
+	kujo_toml := "[project]\n"
+	kujo_toml = kujo_toml + "name = \"" + project_name + "\"\n"
+	kujo_toml = kujo_toml + "version = \"0.1.0\"\n"
+	kujo_toml = kujo_toml + "\n"
+	kujo_toml = kujo_toml + "[runtime]\n"
+	kujo_toml = kujo_toml + "strict = true\n"
+	write_file(project_dir + "/kujo.toml", kujo_toml, true)
+
+	main_kujo := "func main() {\n"
+	main_kujo = main_kujo + "\tprint(\"Hello from " + project_name + "\")\n"
+	main_kujo = main_kujo + "}\n\n"
+	main_kujo = main_kujo + "main()\n"
+	write_file(project_dir + "/src/main.kujo", main_kujo, true)
+
+	test_kujo := "test \"project scaffold compiles\" {\n"
+	test_kujo = test_kujo + "\tassert_true(true)\n"
+	test_kujo = test_kujo + "}\n"
+	write_file(project_dir + "/tests/main_tests.kujo", test_kujo, true)
+
+	readme_md := "# " + project_name + "\n\n"
+	readme_md = readme_md + "Bootstrapped with `kennel new`.\n\n"
+	readme_md = readme_md + "## Quick Start\n\n"
+	readme_md = readme_md + "```bash\n"
+	readme_md = readme_md + "kujo run src/main.kujo\n"
+	readme_md = readme_md + "kujo test\n"
+	readme_md = readme_md + "```\n"
+	write_file(project_dir + "/README.md", readme_md, true)
+
+	print("Created Kujo project scaffold: " + project_dir)
+	print("Next steps:")
+	print("  cd " + project_name)
+	print("  kujo run src/main.kujo")
+	print("  kujo test")
+}
+
+func command_add(cwd, parsed_cli) {
+	source_value := trim(to_string(positional(parsed_cli, 0, "")))
+	if source_value == "" {
+		print("Usage: kennel add <source-or-name> [--alias NAME]")
+		exit(1)
+	}
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	trust_policy := trust_policy_from_manifest(manifest_obj)
+	source_policy := source_policy_with_cli_overrides(source_policy_from_manifest(manifest_obj), parsed_cli)
+	resolution_policy := resolution_policy_from_manifest(manifest_obj)
+	alias_value := trim(to_string(flag_value(parsed_cli, "--alias", "")))
+	if alias_value != "" {
+		alias_value = require_identifier(alias_value, "Dependency alias")
+	}
+	source_parse := parse_source_reference(source_value)
+	if source_parse["ok"] == false && index_of(source_value, "/") < 0 && index_of(source_value, ":") < 0 {
+		by_name := resolve_name_based_source(cwd, manifest_obj, source_value)
+		if by_name["ok"] == false {
+			print(by_name["error"])
+			print_supported_source_guidance()
+			exit(1)
+		}
+		source_parse := by_name["parsed"]
+		print("Resolved `" + source_value + "` via static index: " + by_name["index_path"])
+	} else if source_parse["ok"] == false {
+		print(source_parse["error"])
+		print_supported_source_guidance()
+		exit(1)
+	}
+	dep_name := source_parse["name"]
+	if alias_value != "" {
+		dep_name := alias_value
+	}
+	dep_name = require_identifier(dep_name, "Dependency name")
+	if dependency_exists(manifest_obj, dep_name) {
+		print("Dependency `" + dep_name + "` is already declared. Use `kennel update " + dep_name + "` or remove it first.")
+		exit(1)
+	}
+	state_snapshot := capture_project_state(cwd)
+	install_result := resolve_and_install_dependency(cwd, dep_name, source_parse, trust_policy, source_policy, resolution_policy)
+	if install_result["ok"] == false {
+		print(install_result["error"])
+		exit(1)
+	}
+	dep_entry := dependency_entry_from_source(source_parse, dep_name)
+	manifest_next := set_dependency(manifest_obj, dep_name, dep_entry["entry"])
+	install := install_result["install"]
+	install_cache := {}
+	install_cache[dep_name] := install_result
+	rebuild := rebuild_lockfile_from_manifest(cwd, manifest_next, trust_policy, install_cache, source_policy, resolution_policy)
+	if rebuild["ok"] == false {
+		print("Failed to rebuild lockfile after add: " + rebuild["error"])
+		exit(1)
+	}
+	lock_next := dict_get_or(rebuild, "lockfile", {})
+	persisted := persist_project_state(cwd, state_snapshot, manifest_next, lock_next)
+	if persisted["ok"] == false {
+		print(persisted["error"])
+		exit(1)
+	}
+	print("Added " + dep_name + " from " + source_value)
+	print("Resolved " + dep_name + " to commit " + dict_get_or(install["resolved"], "resolved_commit", ""))
+	print("Installed " + dep_name + " into " + install["install_path"])
+	print("Updated kennel.lock")
+}
+
+func command_install(cwd, parsed_cli) {
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	trust_policy := trust_policy_from_manifest(manifest_obj)
+	source_policy := source_policy_with_cli_overrides(source_policy_from_manifest(manifest_obj), parsed_cli)
+	resolution_policy := resolution_policy_from_manifest(manifest_obj)
+	lock_loaded := load_lockfile(cwd)
+	if lock_loaded["ok"] {
+		entries := dict_get_or(lock_loaded["lockfile"], "package", [])
+		for entry in entries {
+			policy_spec := {
+				"kind": to_string(dict_get_or(entry, "kind", "")),
+				"source": to_string(dict_get_or(entry, "source", "")),
+				"requested": to_string(dict_get_or(entry, "requested", "")),
+				"requested_kind": to_string(dict_get_or(entry, "requested_kind", "none"))
+			}
+			policy_check := enforce_source_policy(to_string(dict_get_or(entry, "name", "")), policy_spec, source_policy)
+			if policy_check["ok"] == false {
+				print(policy_check["error"])
+				exit(1)
+			}
+			install_result := install_locked_package(cwd, entry)
+			if install_result["ok"] == false {
+				print(install_result["error"])
+				exit(1)
+			}
+			verification := verify_package_signature(entry, trust_policy)
+			if verification["ok"] == false {
+				print(verification["error"])
+				exit(1)
+			}
+			print("Installed " + entry["name"] + " into " + install_result["install_path"])
+		}
+		print("Installed dependencies from kennel.lock")
+		return
+	}
+	rebuild := rebuild_lockfile_from_manifest(cwd, manifest_obj, trust_policy, {}, source_policy, resolution_policy)
+	if rebuild["ok"] == false {
+		print("Failed to resolve/install dependencies from manifest: " + rebuild["error"])
+		print("Run `kennel validate` to check dependency declarations, then re-run `kennel install`.")
+		exit(1)
+	}
+	save_lockfile(cwd, rebuild["lockfile"])
+	for entry in rebuild["entries"] {
+		print("Installed " + entry["name"] + " into " + entry["install_path"])
+	}
+	print("Updated kennel.lock")
+}
+
+func command_update(cwd, parsed_cli) {
+	target_name := trim(to_string(positional(parsed_cli, 0, "")))
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	trust_policy := trust_policy_from_manifest(manifest_obj)
+	source_policy := source_policy_with_cli_overrides(source_policy_from_manifest(manifest_obj), parsed_cli)
+	resolution_policy := resolution_policy_from_manifest(manifest_obj)
+	install_cache := {}
+	deps := dependency_map(manifest_obj)
+	if target_name != "" && has_key(deps, target_name) == 0 {
+		print("Dependency `" + target_name + "` not found in kennel.toml")
+		exit(1)
+	}
+	for dep_name in keys(deps) {
+		if target_name != "" && dep_name != target_name {
+			continue
+		}
+		spec_parse := source_ref_from_dependency_entry(dep_name, deps[dep_name])
+		if spec_parse["ok"] == false {
+			print(spec_parse["error"])
+			exit(1)
+		}
+		if update_should_skip(spec_parse) {
+			print("Skipped " + dep_name + " because it is pinned to " + spec_parse["requested_kind"])
+			continue
+		}
+		install_result := resolve_and_install_dependency(cwd, dep_name, spec_parse, trust_policy, source_policy, resolution_policy)
+		if install_result["ok"] == false {
+			print(install_result["error"])
+			exit(1)
+		}
+		install_cache[dep_name] := install_result
+		print("Updated " + dep_name + " to commit " + install_result["install"]["resolved"]["resolved_commit"])
+	}
+	if len(keys(install_cache)) == 0 {
+		print("No dependencies were updated.")
+		return
+	}
+	rebuild := rebuild_lockfile_from_manifest(cwd, manifest_obj, trust_policy, install_cache, source_policy, resolution_policy)
+	if rebuild["ok"] == false {
+		print(rebuild["error"])
+		exit(1)
+	}
+	save_lockfile(cwd, rebuild["lockfile"])
+	print("Updated kennel.lock")
+}
+
+func command_remove(cwd, parsed_cli) {
+	name := trim(to_string(positional(parsed_cli, 0, "")))
+	if name == "" {
+		print("Usage: kennel remove <name>")
+		exit(1)
+	}
+	name = require_identifier(name, "Dependency name")
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	has_manifest_dependency := dependency_exists(manifest_obj, name)
+	lock_loaded := load_lockfile(cwd)
+	has_lockfile_dependency := 0
+	if lock_loaded["ok"] {
+		entries := dict_get_or(lock_loaded["lockfile"], "package", [])
+		for entry in entries {
+			if to_string(dict_get_or(entry, "name", "")) == name {
+				has_lockfile_dependency := 1
+				break
+			}
+		}
+	}
+	if has_manifest_dependency == 0 && has_lockfile_dependency == 0 {
+		print("Dependency `" + name + "` is not declared in kennel.toml. Run `kennel list` to inspect installed dependencies.")
+		exit(1)
+	}
+	state_snapshot := capture_project_state(cwd)
+	manifest_next := manifest_obj
+	if has_manifest_dependency == 1 {
+		manifest_next = remove_dependency(manifest_next, name)
+	}
+	lock_next := ""
+	if lock_loaded["ok"] {
+		lock_next = remove_package(lock_loaded["lockfile"], name)
+	} else if dict_get_or(state_snapshot, "lock_exists", false) {
+		lock_next = empty_lockfile()
+	}
+	persisted := persist_project_state(cwd, state_snapshot, manifest_next, lock_next)
+	if persisted["ok"] == false {
+		print(persisted["error"])
+		exit(1)
+	}
+	package_path := cwd + "/kennel_packages/" + name
+	if path_exists(package_path) {
+		if remove_install_path(package_path) == false {
+			print("Warning: dependency metadata was removed, but install directory cleanup failed for " + package_path)
+		}
+	}
+	print("Removed dependency " + name)
+	print("Updated kennel.lock")
+}
+
+func command_list(cwd) {
+	lock_loaded := load_lockfile(cwd)
+	if lock_loaded["ok"] == false {
+		print("No kennel.lock found. Run `kennel install` first.")
+		return
+	}
+	entries := dict_get_or(lock_loaded["lockfile"], "package", [])
+	if len(entries) == 0 {
+		print("No dependencies installed.")
+		return
+	}
+	for entry in entries {
+		print(entry["name"] + " | " + entry["source"] + " | " + entry["resolved_ref"] + " | " + entry["resolved_commit"])
+	}
+}
+
+func command_info(cwd, parsed_cli) {
+	target := trim(to_string(positional(parsed_cli, 0, "")))
+	if target == "" {
+		print("Usage: kennel info <name-or-source>")
+		exit(1)
+	}
+	if starts_with(target, "github:") || starts_with(target, "https://github.com/") || starts_with(target, "file:") || starts_with(target, "./") || starts_with(target, "../") || starts_with(target, "/") {
+		parsed := parse_source_reference(target)
+		if parsed["ok"] == false {
+			print(parsed["error"])
+			exit(1)
+		}
+		resolved := resolve_dependency(parsed["name"], parsed)
+		if resolved["ok"] == false {
+			print(resolved["error"])
+			exit(1)
+		}
+		print(to_json(resolved["resolved"]))
+		return
+	}
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	index_lookup := index_lookup_paths(cwd, manifest_obj)
+	index_attempted := false
+	if index_lookup["ok"] {
+		index_attempted = true
+		for index_path in index_lookup["paths"] {
+			index_loaded := load_static_index(index_path)
+			if index_loaded["ok"] == false {
+				continue
+			}
+			by_name := resolve_registry_index_name(target, {
+				"index": index_loaded["index"]
+			})
+			if by_name["ok"] {
+				metadata_path := dict_get_or(by_name, "metadata_path", "")
+				metadata_loaded := load_registry_package_metadata(cwd, index_path, metadata_path)
+				if metadata_loaded["ok"] == false {
+					print(metadata_loaded["error"])
+					exit(1)
+				}
+				print(to_json(metadata_loaded["metadata"]))
+				return
+			}
+		}
+	}
+	lock_loaded := load_lockfile(cwd)
+	if lock_loaded["ok"] == false {
+		if index_attempted {
+			print("Package `" + target + "` was not found in static index metadata or kennel.lock")
+			exit(1)
+		}
+		print("No kennel.lock found. Run `kennel install` first.")
+		exit(1)
+	}
+	entries := dict_get_or(lock_loaded["lockfile"], "package", [])
+	found := find_entry_by_name(entries, target)
+	if found["ok"] == false {
+		if index_attempted {
+			print("Package `" + target + "` was not found in static index metadata or kennel.lock")
+			exit(1)
+		}
+		print("Package `" + target + "` not found in kennel.lock")
+		exit(1)
+	}
+	print(to_json(found["entry"]))
+}
+
+func command_search(cwd, parsed_cli) {
+	query := trim(to_string(positional(parsed_cli, 0, "")))
+	if query == "" {
+		print("Usage: kennel search <query>")
+		exit(1)
+	}
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	lookup := index_lookup_paths(cwd, manifest_obj)
+	if lookup["ok"] == false {
+		print(lookup["error"])
+		exit(1)
+	}
+	combined_results := []
+	seen_names := {}
+	for index_path in lookup["paths"] {
+		index_loaded := load_static_index(index_path)
+		if index_loaded["ok"] == false {
+			print(index_loaded["error"])
+			exit(1)
+		}
+		search_result := search_registry_index(query, {
+			"index": index_loaded["index"]
+		})
+		if search_result["ok"] == false {
+			continue
+		}
+		for entry in dict_get_or(search_result, "results", []) {
+			result_name := to_string(dict_get_or(entry, "name", ""))
+			if result_name == "" {
+				continue
+			}
+			if has_key(seen_names, result_name) == 1 {
+				continue
+			}
+			seen_names[result_name] := true
+			entry_with_source := entry
+			entry_with_source["index_path"] := index_path
+			combined_results = push(combined_results, entry_with_source)
+		}
+	}
+	print("Search results for `" + query + "` across configured static indexes")
+	for entry in combined_results {
+		print(to_string(dict_get_or(entry, "name", "")) + " | " + to_string(dict_get_or(entry, "latest", "")) + " | " + to_string(dict_get_or(entry, "metadata_path", "")) + " | " + to_string(dict_get_or(entry, "index_path", "")))
+	}
+}
+
+func command_validate(cwd) {
+	loaded := ensure_project_manifest(cwd)
+	report := validate_manifest(loaded["manifest"])
+	print_validation_report(report)
+	if report["ok"] == false {
+		exit(1)
+	}
+}
+
+export command_init := command_init
+export command_new := command_new
+export command_add := command_add
+export command_install := command_install
+export command_update := command_update
+export command_remove := command_remove
+export command_list := command_list
+export command_info := command_info
+export command_search := command_search
+export command_validate := command_validate

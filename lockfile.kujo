@@ -1,0 +1,11 @@
+from src.lockfile import LOCKFILE_FILENAME, lockfile_path, empty_lockfile, load_lockfile, save_lockfile, set_packages, packages, find_package, remove_package
+
+export LOCKFILE_FILENAME := LOCKFILE_FILENAME
+export lockfile_path := lockfile_path
+export empty_lockfile := empty_lockfile
+export load_lockfile := load_lockfile
+export save_lockfile := save_lockfile
+export set_packages := set_packages
+export packages := packages
+export find_package := find_package
+export remove_package := remove_package

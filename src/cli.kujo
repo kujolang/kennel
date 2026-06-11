@@ -1,0 +1,115 @@
+func parse_cli(argv) {
+	if len(argv) == 0 {
+		return {
+			"command": "help",
+			"positionals": [],
+			"flags": {}
+		}
+	}
+	command := argv[0]
+	positionals := []
+	flags := {}
+	i := 1
+	while i < len(argv) {
+		token := argv[i]
+		if starts_with(token, "--") {
+			if index_of(token, "=") >= 0 {
+				parts := split(token, "=")
+				flags[parts[0]] := parts[1]
+				i := i + 1
+				continue
+			}
+			if i + 1 < len(argv) && starts_with(argv[i + 1], "--") == false {
+				flags[token] := argv[i + 1]
+				i := i + 2
+				continue
+			}
+			flags[token] := true
+			i := i + 1
+			continue
+		}
+		positionals := push(positionals, token)
+		i := i + 1
+	}
+	return {
+		"command": command,
+		"positionals": positionals,
+		"flags": flags
+	}
+}
+
+func has_flag(parsed_cli, flag_name) {
+	return has_key(parsed_cli["flags"], flag_name)
+}
+
+func flag_value(parsed_cli, flag_name, fallback) {
+	if has_key(parsed_cli["flags"], flag_name) {
+		return parsed_cli["flags"][flag_name]
+	}
+	return fallback
+}
+
+func positional(parsed_cli, index, fallback) {
+	values := parsed_cli["positionals"]
+	if index >= 0 && index < len(values) {
+		return values[index]
+	}
+	return fallback
+}
+
+func print_help() {
+	print("Kennel")
+	print("Production package manager for Kujo with deterministic lockfiles and hosted-registry workflows")
+	print("")
+	print("Usage:")
+	print("  kennel init [--name NAME] [--force] [--project-dir PATH]")
+	print("  kennel new <project-name> [--force] [--project-dir PATH]")
+	print("  kennel add <source-or-name> [--alias NAME] [--allow-mutable-ref] [--project-dir PATH]")
+	print("  kennel install [--allow-mutable-ref] [--project-dir PATH]")
+	print("  kennel update [name] [--allow-mutable-ref] [--project-dir PATH]")
+	print("  kennel remove <name> [--project-dir PATH]")
+	print("  kennel list [--project-dir PATH]")
+	print("  kennel search <query> [--project-dir PATH]")
+	print("  kennel info <name-or-source> [--project-dir PATH]")
+	print("  kennel login (--token TOKEN | --token-file PATH) [--registry NAME] [--user NAME] [--store-path PATH] [--project-dir PATH]")
+	print("  kennel publish [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--private|--public] [--project-dir PATH]")
+	print("  kennel yank <version> [--package NAME] [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--undo] [--project-dir PATH]")
+	print("  kennel access <owner-add|owner-remove|team-add|team-remove|list> <package> [target] [--role ROLE] [--permission NAME] [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--project-dir PATH]")
+	print("  kennel visibility <package> <public|private> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--project-dir PATH]")
+	print("  kennel api-search <query> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--project-dir PATH]")
+	print("  kennel api-metadata <package> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--project-dir PATH]")
+	print("  kennel install-hosted <package> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--allow-mutable-ref] [--project-dir PATH]")
+	print("  kennel validate [--project-dir PATH]")
+	print("")
+	print("Supported sources:")
+	print("  github:owner/repo@ref")
+	print("  github:owner/repo")
+	print("  https://github.com/owner/repo.git#ref")
+	print("  file:../local-package or ../local-package")
+	print("")
+	print("Examples:")
+	print("  kennel init --name demo")
+	print("  kennel new demo-app")
+	print("  kennel add github:robertdevore/pypractice@main --alias pypractice")
+	print("  kennel install")
+	print("  kennel login --token-file ~/.kennel/token.txt --registry hosted-registry --user alice")
+	print("  kennel publish --registry hosted-registry --user alice --store-path ~/.kennel/tokens.json --registry-dir ./hosted-registry")
+	print("")
+	print("Recovery guidance:")
+	print("  Missing kennel.toml: run `kennel init` in the project root or pass --project-dir PATH.")
+	print("  Duplicate dependency alias: run `kennel update <alias>` or `kennel remove <alias>` first.")
+	print("  Hosted auth failures: run `kennel login` again and verify --store-path, --registry, and --user values.")
+	print("")
+	print("Security hints:")
+	print("  Prefer --token-file over --token so secrets are not echoed in shell history.")
+	print("  Keep token store paths outside repositories and use restrictive file permissions.")
+	print("  Prefer explicit refs and commit pins for reproducible installs.")
+	print("")
+	print("Tip: prefer explicit refs and commit pins for reproducible installs.")
+}
+
+export parse_cli := parse_cli
+export has_flag := has_flag
+export flag_value := flag_value
+export positional := positional
+export print_help := print_help

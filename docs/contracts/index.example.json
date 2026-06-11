@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-19T00:00:00Z",
+  "packages": [
+    {
+      "name": "ai-sdk",
+      "latest": "v0.3.0",
+      "metadata_path": "packages/ai-sdk.json",
+      "versions": [
+        {
+          "version": "v0.3.0",
+          "source": "github:kujolang/ai-sdk",
+          "ref": "v0.3.0",
+          "checksum": "sha256:example-ai-sdk-v030"
+        },
+        {
+          "version": "v0.2.0",
+          "source": "github:kujolang/ai-sdk",
+          "ref": "v0.2.0",
+          "yanked": false
+        }
+      ]
+    },
+    {
+      "name": "mcp",
+      "latest": "v0.1.0",
+      "metadata_path": "packages/mcp.json",
+      "versions": [
+        {
+          "version": "v0.1.0",
+          "source": "github:kujolang/mcp",
+          "ref": "v0.1.0"
+        }
+      ]
+    }
+  ]
+}

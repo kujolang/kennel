@@ -1,0 +1,25 @@
+from src.commands_shared import ensure_project_manifest, resolve_and_install_dependency, trust_policy_from_manifest, source_policy_from_manifest, source_policy_with_cli_overrides, resolution_policy_from_manifest, enforce_source_policy, require_identifier, capture_project_state, persist_project_state, lockfile_with_updated_install, resolve_registry_request_context, print_supported_source_guidance, index_lookup_path, index_lookup_paths, load_static_index, load_registry_package_metadata, resolve_name_based_source, rebuild_lockfile_from_manifest, find_entry_by_name, read_login_token_from_file, select_hosted_version_entry, update_should_skip
+
+export ensure_project_manifest := ensure_project_manifest
+export resolve_and_install_dependency := resolve_and_install_dependency
+export trust_policy_from_manifest := trust_policy_from_manifest
+export source_policy_from_manifest := source_policy_from_manifest
+export source_policy_with_cli_overrides := source_policy_with_cli_overrides
+export resolution_policy_from_manifest := resolution_policy_from_manifest
+export enforce_source_policy := enforce_source_policy
+export require_identifier := require_identifier
+export capture_project_state := capture_project_state
+export persist_project_state := persist_project_state
+export lockfile_with_updated_install := lockfile_with_updated_install
+export resolve_registry_request_context := resolve_registry_request_context
+export print_supported_source_guidance := print_supported_source_guidance
+export index_lookup_path := index_lookup_path
+export index_lookup_paths := index_lookup_paths
+export load_static_index := load_static_index
+export load_registry_package_metadata := load_registry_package_metadata
+export resolve_name_based_source := resolve_name_based_source
+export rebuild_lockfile_from_manifest := rebuild_lockfile_from_manifest
+export find_entry_by_name := find_entry_by_name
+export read_login_token_from_file := read_login_token_from_file
+export select_hosted_version_entry := select_hosted_version_entry
+export update_should_skip := update_should_skip

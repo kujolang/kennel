@@ -1,0 +1,3 @@
+from src.error_shape import error_result
+
+export error_result := error_result

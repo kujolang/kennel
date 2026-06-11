@@ -1,0 +1,196 @@
+test_setup {
+	from cli import flag_value, has_flag, parse_cli, positional
+	from commands_shared import enforce_source_policy, load_static_index, read_login_token_from_file, source_policy_from_manifest, source_policy_with_cli_overrides
+	from dependency_spec import parse_source_reference
+	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version
+	from lockfile import empty_lockfile, set_packages
+	from manifest import default_manifest
+	from resolver import format_git_ls_remote_error, resolve_dependency, resolve_dependency_with_policy
+	from utils import dict_get_or
+}
+
+test "parse_cli handles --flag value and mixed positionals" {
+	parsed := parse_cli(["install-hosted", "demo-pkg", "--registry", "hosted-registry", "--project-dir", "/tmp/demo", "extra-positional"])
+	assert_equal(parsed["command"], "install-hosted")
+	assert_equal(positional(parsed, 0, ""), "demo-pkg")
+	assert_equal(positional(parsed, 1, ""), "extra-positional")
+	assert_equal(flag_value(parsed, "--registry", ""), "hosted-registry")
+	assert_equal(flag_value(parsed, "--project-dir", ""), "/tmp/demo")
+}
+
+test "shared command helpers return standardized error context for invalid static index" {
+	invalid_index_path := "/tmp/kennel-contract-invalid-index.json"
+	write_file(invalid_index_path, "{not-json", true)
+	loaded := load_static_index(invalid_index_path)
+	assert_equal(loaded["ok"], false)
+	assert_true(index_of(to_string(loaded["error"]), "Invalid static index JSON") >= 0)
+	assert_equal(type(dict_get_or(loaded, "context", {})), "dict")
+	assert_equal(dict_get_or(loaded["context"], "operation", ""), "load_static_index")
+	assert_equal(dict_get_or(loaded["context"], "stage", ""), "invalid_json")
+}
+
+test "shared command helpers return standardized error context for missing token file" {
+	missing := read_login_token_from_file("/tmp", "/tmp/this-file-should-not-exist.token")
+	assert_equal(missing["ok"], false)
+	assert_true(index_of(to_string(missing["error"]), "Token file was not found") >= 0)
+	assert_equal(type(dict_get_or(missing, "context", {})), "dict")
+	assert_equal(dict_get_or(missing["context"], "operation", ""), "read_login_token_from_file")
+	assert_equal(dict_get_or(missing["context"], "stage", ""), "missing_file")
+}
+
+test "parse_cli handles --flag=value syntax" {
+	parsed := parse_cli(["publish", "--registry=hosted-registry", "--user=alice", "--store-path=/tmp/tokens.json"])
+	assert_equal(parsed["command"], "publish")
+	assert_equal(flag_value(parsed, "--registry", ""), "hosted-registry")
+	assert_equal(flag_value(parsed, "--user", ""), "alice")
+	assert_equal(flag_value(parsed, "--store-path", ""), "/tmp/tokens.json")
+}
+
+test "parse_cli boolean flags and helper accessors are stable" {
+	parsed := parse_cli(["install", "--dry-run", "--strict", "--project-dir", "/tmp/demo"])
+	assert_equal(parsed["command"], "install")
+	assert_equal(has_flag(parsed, "--dry-run"), 1)
+	assert_equal(has_flag(parsed, "--strict"), 1)
+	assert_equal(flag_value(parsed, "--dry-run", false), true)
+	assert_equal(flag_value(parsed, "--strict", false), true)
+	assert_equal(flag_value(parsed, "--project-dir", ""), "/tmp/demo")
+	assert_equal(flag_value(parsed, "--missing", "fallback"), "fallback")
+}
+
+test "parse_cli preserves unknown tokens and positional order" {
+	parsed := parse_cli(["frobnicate", "alpha", "--mode=fast", "beta", "--noop"])
+	assert_equal(parsed["command"], "frobnicate")
+	assert_equal(positional(parsed, 0, ""), "alpha")
+	assert_equal(positional(parsed, 1, ""), "beta")
+	assert_equal(flag_value(parsed, "--mode", ""), "fast")
+	assert_equal(flag_value(parsed, "--noop", false), true)
+}
+
+test "positional helper uses fallback on out-of-range indexes" {
+	parsed := parse_cli(["list", "dep-a"])
+	assert_equal(positional(parsed, 0, "missing"), "dep-a")
+	assert_equal(positional(parsed, 1, "missing"), "missing")
+	assert_equal(positional(parsed, -1, "missing"), "missing")
+}
+
+test "parse github shorthand with ref" {
+	parsed := parse_source_reference("github:kujolang/kujo@main")
+	assert_equal(parsed["ok"], true)
+	assert_equal(parsed["kind"], "github")
+	assert_equal(parsed["owner"], "kujolang")
+	assert_equal(parsed["repo"], "kujo")
+	assert_equal(parsed["requested"], "main")
+}
+
+test "parse github shorthand with semver range" {
+	parsed := parse_source_reference("github:pallets/itsdangerous@^2.1.0")
+	assert_equal(parsed["ok"], true)
+	assert_equal(parsed["requested"], "^2.1.0")
+	assert_equal(parsed["requested_kind"], "range")
+}
+
+test "parse github https with tag" {
+	parsed := parse_source_reference("https://github.com/kujolang/kujo.git#v0.14.0")
+	assert_equal(parsed["ok"], true)
+	assert_equal(parsed["kind"], "git")
+	assert_equal(parsed["requested"], "v0.14.0")
+}
+
+test "default manifest includes production status metadata and dependencies table" {
+	manifest := default_manifest("demo")
+	assert_equal(manifest["package"]["name"], "demo")
+	assert_equal(has_key(manifest, "dependencies"), 1)
+	assert_equal(has_key(manifest["package"], "status"), 1)
+	assert_equal(manifest["package"]["status"]["stage"], "production")
+	assert_equal(manifest["package"]["status"]["stability"], "stable")
+}
+
+test "source policy blocks mutable refs when strict mode is enabled" {
+	manifest := default_manifest("demo")
+	policy_doc := manifest["policy"]
+	source_doc := policy_doc["source"]
+	source_doc["strict_mutable_refs"] := true
+	policy_doc["source"] := source_doc
+	manifest["policy"] := policy_doc
+	policy := source_policy_from_manifest(manifest)
+	parsed := parse_source_reference("github:kujolang/kujo@main")
+	assert_equal(parsed["ok"], true)
+	check := enforce_source_policy("kujo", parsed, policy)
+	assert_equal(check["ok"], false)
+	assert_true(index_of(to_string(check["error"]), "blocked mutable ref") >= 0)
+}
+
+test "source policy allows mutable refs with explicit cli override" {
+	manifest := default_manifest("demo")
+	policy_doc := manifest["policy"]
+	source_doc := policy_doc["source"]
+	source_doc["strict_mutable_refs"] := true
+	policy_doc["source"] := source_doc
+	manifest["policy"] := policy_doc
+	policy := source_policy_from_manifest(manifest)
+	override_cli := parse_cli(["install", "--allow-mutable-ref"])
+	overridden_policy := source_policy_with_cli_overrides(policy, override_cli)
+	parsed := parse_source_reference("github:kujolang/kujo@main")
+	assert_equal(parsed["ok"], true)
+	check := enforce_source_policy("kujo", parsed, overridden_policy)
+	assert_equal(check["ok"], true)
+	assert_equal(overridden_policy["allow_mutable_refs"], true)
+	assert_equal(overridden_policy["override_reason"], "cli:--allow-mutable-ref")
+}
+
+test "source policy permits pinned refs during strict mode" {
+	manifest := default_manifest("demo")
+	policy_doc := manifest["policy"]
+	source_doc := policy_doc["source"]
+	source_doc["strict_mutable_refs"] := true
+	policy_doc["source"] := source_doc
+	manifest["policy"] := policy_doc
+	policy := source_policy_from_manifest(manifest)
+	parsed := parse_source_reference("github:kujolang/kujo@v0.14.0")
+	assert_equal(parsed["ok"], true)
+	check := enforce_source_policy("kujo", parsed, policy)
+	assert_equal(check["ok"], true)
+}
+
+test "lockfile package ordering is deterministic by name" {
+	lock := empty_lockfile()
+	entries := [
+		{"name": "zeta"},
+		{"name": "alpha"}
+	]
+	updated := set_packages(lock, entries)
+	assert_equal(updated["package"][0]["name"], "alpha")
+	assert_equal(updated["package"][1]["name"], "zeta")
+}
+
+test "resolve github ref to commit" {
+	spec := parse_source_reference("github:psf/requests@main")
+	assert_equal(spec["ok"], true)
+	resolved := resolve_dependency("requests", spec)
+	assert_equal(resolved["ok"], true)
+	assert_equal(resolved["resolved"]["resolved_ref"], "main")
+	assert_true(len(resolved["resolved"]["resolved_commit"]) > 6)
+}
+
+test "resolve semver range when policy is enabled" {
+	spec := parse_source_reference("github:pallets/itsdangerous@^2.1.0")
+	assert_equal(spec["ok"], true)
+	resolved := resolve_dependency_with_policy("itsdangerous", spec, {
+		"semver_ranges": true
+	})
+	assert_equal(resolved["ok"], true)
+	assert_true(index_of(to_string(resolved["resolved"]["resolved_ref"]), "2.") == 0)
+	assert_equal(resolved["resolved"]["requested_kind"], "range")
+}
+
+test "resolver diagnostics identify repository-not-found" {
+	message := format_git_ls_remote_error("https://github.com/example/missing.git", "main", "remote: Repository not found.")
+	assert_true(index_of(message, "Repository not found") >= 0)
+	assert_true(index_of(message, "Verify owner/repo") >= 0)
+}
+
+test "resolver diagnostics include ref guidance for generic failures" {
+	message := format_git_ls_remote_error("https://github.com/example/repo.git", "missing-ref", "fatal: unable to access")
+	assert_true(index_of(message, "Failed to resolve ref `missing-ref`") >= 0)
+	assert_true(index_of(message, "requested ref exists") >= 0)
+}

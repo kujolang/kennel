@@ -1,0 +1,4 @@
+from src.hosted_auth import hosted_token_store_path, hosted_auth_token_store
+
+export hosted_token_store_path := hosted_token_store_path
+export hosted_auth_token_store := hosted_auth_token_store

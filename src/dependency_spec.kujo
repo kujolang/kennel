@@ -1,0 +1,307 @@
+from src.utils import dict_get_or, parse_ref_kind, path_basename, trim_or
+
+func normalize_github_repo(repo_part) {
+	trimmed := trim(repo_part)
+	if ends_with(trimmed, ".git") {
+		trimmed := substring(trimmed, 0, len(trimmed) - 4)
+	}
+	if starts_with(trimmed, "/") {
+		trimmed := substring(trimmed, 1, len(trimmed))
+	}
+	parts := split(trimmed, "/")
+	if len(parts) < 2 {
+		return {
+			"ok": false,
+			"error": "GitHub source must include owner/repo"
+		}
+	}
+	owner := trim(parts[0])
+	repo := trim(parts[1])
+	if owner == "" || repo == "" {
+		return {
+			"ok": false,
+			"error": "GitHub source owner/repo cannot be empty"
+		}
+	}
+	return {
+		"ok": true,
+		"owner": owner,
+		"repo": repo
+	}
+}
+
+func parse_github_source(raw_source) {
+	body := substring(raw_source, len("github:"), len(raw_source))
+	requested := ""
+	repo_part := body
+	if index_of(body, "@") >= 0 {
+		pair := split(body, "@")
+		repo_part := pair[0]
+		requested := pair[1]
+	}
+	normalized := normalize_github_repo(repo_part)
+	if normalized["ok"] == false {
+		return normalized
+	}
+	ref_kind := parse_ref_kind(requested)
+	source := "github:" + normalized["owner"] + "/" + normalized["repo"]
+	url := "https://github.com/" + normalized["owner"] + "/" + normalized["repo"] + ".git"
+	return {
+		"ok": true,
+		"kind": "github",
+		"source": source,
+		"owner": normalized["owner"],
+		"repo": normalized["repo"],
+		"url": url,
+		"name": normalized["repo"],
+		"requested": ref_kind["value"],
+		"requested_kind": ref_kind["kind"]
+	}
+}
+
+func parse_github_url_source(raw_source) {
+	requested := ""
+	url := raw_source
+	if index_of(raw_source, "#") >= 0 {
+		pair := split(raw_source, "#")
+		url := pair[0]
+		requested := pair[1]
+	}
+	without_scheme := replace(url, "https://github.com/", "")
+	normalized := normalize_github_repo(without_scheme)
+	if normalized["ok"] == false {
+		return normalized
+	}
+	ref_kind := parse_ref_kind(requested)
+	source := "github:" + normalized["owner"] + "/" + normalized["repo"]
+	git_url := "https://github.com/" + normalized["owner"] + "/" + normalized["repo"] + ".git"
+	return {
+		"ok": true,
+		"kind": "git",
+		"source": source,
+		"owner": normalized["owner"],
+		"repo": normalized["repo"],
+		"url": git_url,
+		"name": normalized["repo"],
+		"requested": ref_kind["value"],
+		"requested_kind": ref_kind["kind"]
+	}
+}
+
+func parse_local_source(raw_source) {
+	path_value := raw_source
+	if starts_with(raw_source, "file:") {
+		path_value := substring(raw_source, len("file:"), len(raw_source))
+	}
+	abs := path_absolute(path_value)
+	if path_exists(abs) == false {
+		return {
+			"ok": false,
+			"error": "Local package path does not exist: " + path_value
+		}
+	}
+	if path_is_dir(abs) == false {
+		return {
+			"ok": false,
+			"error": "Local package path must be a directory: " + path_value
+		}
+	}
+	name := path_basename(abs)
+	return {
+		"ok": true,
+		"kind": "path",
+		"source": "file:" + abs,
+		"path": abs,
+		"name": name,
+		"requested": "",
+		"requested_kind": "none"
+	}
+}
+
+func parse_source_reference(raw_source) {
+	source := trim(raw_source)
+	if source == "" {
+		return {
+			"ok": false,
+			"error": "Dependency source cannot be empty"
+		}
+	}
+	if starts_with(source, "github:") {
+		return parse_github_source(source)
+	}
+	if starts_with(source, "https://github.com/") {
+		return parse_github_url_source(source)
+	}
+	if starts_with(source, "file:") {
+		return parse_local_source(source)
+	}
+	if starts_with(source, "./") || starts_with(source, "../") || starts_with(source, "/") {
+		return parse_local_source(source)
+	}
+	return {
+		"ok": false,
+		"error": "Unsupported source format: " + source
+	}
+}
+
+func source_ref_from_dependency_entry(name, dep_entry) {
+	if type(dep_entry) != "dict" {
+		return {
+			"ok": false,
+			"error": "Dependency `" + name + "` must be a table with source metadata"
+		}
+	}
+	if has_key(dep_entry, "path") {
+		path_value := trim_or(dep_entry["path"], "")
+		parsed := parse_local_source(path_value)
+		if parsed["ok"] == false {
+			return parsed
+		}
+		if has_key(dep_entry, "checksum") {
+			parsed["checksum"] := trim_or(dep_entry["checksum"], "")
+		}
+		if has_key(dep_entry, "signature") {
+			parsed["signature"] := trim_or(dep_entry["signature"], "")
+		}
+		if has_key(dep_entry, "signing_key") {
+			parsed["signing_key"] := trim_or(dep_entry["signing_key"], "")
+		}
+		return parsed
+	}
+	if has_key(dep_entry, "source") {
+		source_value := trim_or(dep_entry["source"], "")
+		parsed := parse_source_reference(source_value)
+		if parsed["ok"] == false {
+			return parsed
+		}
+		if has_key(dep_entry, "version") {
+			parsed["requested"] := trim_or(dep_entry["version"], "")
+			parsed["requested_kind"] := "version"
+		} else if has_key(dep_entry, "tag") {
+			parsed["requested"] := trim_or(dep_entry["tag"], "")
+			parsed["requested_kind"] := "tag"
+		} else if has_key(dep_entry, "commit") {
+			parsed["requested"] := trim_or(dep_entry["commit"], "")
+			parsed["requested_kind"] := "commit"
+		} else if has_key(dep_entry, "range") {
+			parsed["requested"] := trim_or(dep_entry["range"], "")
+			parsed["requested_kind"] := "range"
+		} else if has_key(dep_entry, "ref") {
+			parsed["requested"] := trim_or(dep_entry["ref"], "")
+			parsed["requested_kind"] := "ref"
+		}
+		if has_key(dep_entry, "checksum") {
+			parsed["checksum"] := trim_or(dep_entry["checksum"], "")
+		}
+		if has_key(dep_entry, "signature") {
+			parsed["signature"] := trim_or(dep_entry["signature"], "")
+		}
+		if has_key(dep_entry, "signing_key") {
+			parsed["signing_key"] := trim_or(dep_entry["signing_key"], "")
+		}
+		parsed["name"] := name
+		return parsed
+	}
+	if has_key(dep_entry, "git") {
+		git_value := trim_or(dep_entry["git"], "")
+		parsed := parse_source_reference(git_value)
+		if parsed["ok"] == false {
+			return parsed
+		}
+		parsed["kind"] := "git"
+		if has_key(dep_entry, "version") {
+			parsed["requested"] := trim_or(dep_entry["version"], "")
+			parsed["requested_kind"] := "version"
+		} else if has_key(dep_entry, "tag") {
+			parsed["requested"] := trim_or(dep_entry["tag"], "")
+			parsed["requested_kind"] := "tag"
+		} else if has_key(dep_entry, "commit") {
+			parsed["requested"] := trim_or(dep_entry["commit"], "")
+			parsed["requested_kind"] := "commit"
+		} else if has_key(dep_entry, "range") {
+			parsed["requested"] := trim_or(dep_entry["range"], "")
+			parsed["requested_kind"] := "range"
+		} else if has_key(dep_entry, "ref") {
+			parsed["requested"] := trim_or(dep_entry["ref"], "")
+			parsed["requested_kind"] := "ref"
+		}
+		if has_key(dep_entry, "checksum") {
+			parsed["checksum"] := trim_or(dep_entry["checksum"], "")
+		}
+		if has_key(dep_entry, "signature") {
+			parsed["signature"] := trim_or(dep_entry["signature"], "")
+		}
+		if has_key(dep_entry, "signing_key") {
+			parsed["signing_key"] := trim_or(dep_entry["signing_key"], "")
+		}
+		parsed["name"] := name
+		return parsed
+	}
+	return {
+		"ok": false,
+		"error": "Dependency `" + name + "` is missing source/git/path"
+	}
+}
+
+func dependency_entry_from_source(parsed, alias_name) {
+	entry := {}
+	if parsed["kind"] == "path" {
+		entry["path"] := parsed["path"]
+		checksum_value := trim_or(dict_get_or(parsed, "checksum", ""), "")
+		if checksum_value != "" {
+			entry["checksum"] := checksum_value
+		}
+		signature_value := trim_or(dict_get_or(parsed, "signature", ""), "")
+		if signature_value != "" {
+			entry["signature"] := signature_value
+		}
+		signing_key_value := trim_or(dict_get_or(parsed, "signing_key", ""), "")
+		if signing_key_value != "" {
+			entry["signing_key"] := signing_key_value
+		}
+		return {
+			"name": alias_name,
+			"entry": entry
+		}
+	}
+	if parsed["kind"] == "git" {
+		entry["git"] := parsed["url"]
+	} else {
+		entry["source"] := parsed["source"]
+	}
+	requested := dict_get_or(parsed, "requested", "")
+	requested_kind := dict_get_or(parsed, "requested_kind", "none")
+	if requested != "" {
+		if requested_kind == "commit" {
+			entry["commit"] := requested
+		} else if requested_kind == "version" {
+			entry["version"] := requested
+		} else if requested_kind == "tag" {
+			entry["tag"] := requested
+		} else if requested_kind == "range" {
+			entry["range"] := requested
+		} else {
+			entry["ref"] := requested
+		}
+	}
+	checksum_value := trim_or(dict_get_or(parsed, "checksum", ""), "")
+	if checksum_value != "" {
+		entry["checksum"] := checksum_value
+	}
+	signature_value := trim_or(dict_get_or(parsed, "signature", ""), "")
+	if signature_value != "" {
+		entry["signature"] := signature_value
+	}
+	signing_key_value := trim_or(dict_get_or(parsed, "signing_key", ""), "")
+	if signing_key_value != "" {
+		entry["signing_key"] := signing_key_value
+	}
+	return {
+		"name": alias_name,
+		"entry": entry
+	}
+}
+
+export parse_source_reference := parse_source_reference
+export source_ref_from_dependency_entry := source_ref_from_dependency_entry
+export dependency_entry_from_source := dependency_entry_from_source

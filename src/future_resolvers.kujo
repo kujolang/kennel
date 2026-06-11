@@ -1,0 +1,1894 @@
+# Registry and hosted-workflow extension hooks.
+# These helpers keep index, auth, publish, access, and trust concerns centralized.
+
+from hosted_auth import hosted_auth_token_store, hosted_token_store_path
+from hosted_trust import hosted_verify_package_signature
+from src.utils import command_ok, dict_get_or, is_base64_text, is_safe_signing_key, parse_checksum, run_shell, shell_quote, validate_identifier
+
+func index_packages(index_doc) {
+	if type(index_doc) != "dict" {
+		return []
+	}
+	packages := dict_get_or(index_doc, "packages", [])
+	if type(packages) != "array" {
+		return []
+	}
+	return packages
+}
+
+func find_index_package(index_doc, package_name) {
+	for package_entry in index_packages(index_doc) {
+		if to_string(dict_get_or(package_entry, "name", "")) == package_name {
+			return {
+				"ok": true,
+				"package": package_entry
+			}
+		}
+	}
+	return {
+		"ok": false,
+		"package": {}
+	}
+}
+
+func find_version_entry(versions, version_name) {
+	for version_entry in versions {
+		if to_string(dict_get_or(version_entry, "version", "")) == version_name {
+			return {
+				"ok": true,
+				"version": version_entry
+			}
+		}
+	}
+	return {
+		"ok": false,
+		"version": {}
+	}
+}
+
+func normalize_identifier_input(value, label, allow_empty) {
+	text := trim(to_string(value))
+	if allow_empty && text == "" {
+		return {
+			"ok": true,
+			"value": ""
+		}
+	}
+	validation := validate_identifier(text, label)
+	if validation["ok"] == false {
+		return {
+			"ok": false,
+			"error": validation["error"],
+			"value": text
+		}
+	}
+	return {
+		"ok": true,
+		"value": validation["value"]
+	}
+}
+
+func parent_dir_path(path_value) {
+	parts := split(path_value, "/")
+	if len(parts) <= 1 {
+		return "."
+	}
+	is_absolute := starts_with(path_value, "/")
+	result := ""
+	if is_absolute {
+		result := "/"
+	}
+	i := 0
+	limit := len(parts) - 1
+	while i < limit {
+		part := parts[i]
+		i := i + 1
+		if part == "" {
+			continue
+		}
+		if result != "" && ends_with(result, "/") == false {
+			result := result + "/"
+		}
+		result := result + part
+	}
+	if result == "" {
+		return "."
+	}
+	return result
+}
+
+export func token_store_path(payload) {
+	return hosted_token_store_path(payload)
+}
+
+func default_registry_index_doc(timestamp_value) {
+	return {
+		"schema_version": 1,
+		"generated_at": timestamp_value,
+		"packages": []
+	}
+}
+
+func load_registry_index_doc(index_path, timestamp_value) {
+	if file_exists(index_path) == false {
+		return {
+			"ok": true,
+			"index": default_registry_index_doc(timestamp_value)
+		}
+	}
+	raw := read_file(index_path)
+	try {
+		parsed := parse_json(raw)
+		if type(parsed) != "dict" {
+			return {
+				"ok": false,
+				"error": "Registry index must contain a JSON object: " + index_path
+			}
+		}
+		if has_key(parsed, "packages") == false || type(parsed["packages"]) != "array" {
+			parsed["packages"] := []
+		}
+		if has_key(parsed, "schema_version") == false {
+			parsed["schema_version"] := 1
+		}
+		return {
+			"ok": true,
+			"index": parsed
+		}
+	} except err {
+		return {
+			"ok": false,
+			"error": "Invalid registry index JSON: " + to_string(err)
+		}
+	}
+}
+
+func load_package_metadata_doc(metadata_path, package_name, package_table) {
+	if file_exists(metadata_path) == false {
+		return {
+			"ok": true,
+			"metadata": {
+				"name": package_name,
+				"latest": "",
+				"description": trim(to_string(dict_get_or(package_table, "description", ""))),
+				"repository": trim(to_string(dict_get_or(package_table, "repository", ""))),
+				"versions": []
+			}
+		}
+	}
+	raw := read_file(metadata_path)
+	try {
+		parsed := parse_json(raw)
+		if type(parsed) != "dict" {
+			return {
+				"ok": false,
+				"error": "Package metadata must contain a JSON object: " + metadata_path
+			}
+		}
+		if has_key(parsed, "versions") == false || type(parsed["versions"]) != "array" {
+			parsed["versions"] := []
+		}
+		if trim(to_string(dict_get_or(parsed, "name", ""))) == "" {
+			parsed["name"] := package_name
+		}
+		return {
+			"ok": true,
+			"metadata": parsed
+		}
+	} except err {
+		return {
+			"ok": false,
+			"error": "Invalid package metadata JSON: " + to_string(err)
+		}
+	}
+}
+
+func capture_file_state(path_value) {
+	exists := file_exists(path_value)
+	raw := ""
+	if exists {
+		raw = read_file(path_value)
+	}
+	return {
+		"path": path_value,
+		"exists": exists,
+		"raw": raw
+	}
+}
+
+func restore_file_state(state) {
+	path_value := to_string(dict_get_or(state, "path", ""))
+	if path_value == "" {
+		return
+	}
+	if dict_get_or(state, "exists", false) {
+		write_file(path_value, to_string(dict_get_or(state, "raw", "")), true)
+		return
+	}
+	if file_exists(path_value) {
+		run_shell("rm -f " + shell_quote(path_value))
+	}
+}
+
+func persist_json_pair_atomic(path_one, doc_one, path_two, doc_two, options) {
+	state_one := capture_file_state(path_one)
+	state_two := capture_file_state(path_two)
+	try {
+		write_file(path_one, to_json(doc_one), true)
+		if dict_get_or(options, "test_fail_after_first_write", false) == true {
+			throw "Simulated paired-write failure after first write."
+		}
+		write_file(path_two, to_json(doc_two), true)
+		return {
+			"ok": true
+		}
+	} except err {
+		restore_file_state(state_one)
+		restore_file_state(state_two)
+		return {
+			"ok": false,
+			"error": "Failed to persist paired registry state: " + to_string(err),
+			"path_one": path_one,
+			"path_two": path_two
+		}
+	}
+}
+
+func replace_index_package(packages, package_name, package_entry) {
+	updated := []
+	replaced := false
+	for existing in packages {
+		if to_string(dict_get_or(existing, "name", "")) == package_name {
+			updated := push(updated, package_entry)
+			replaced = true
+			continue
+		}
+		updated := push(updated, existing)
+	}
+	if replaced == false {
+		updated := push(updated, package_entry)
+	}
+	return updated
+}
+
+func has_published_version(versions, version_name) {
+	for entry in versions {
+		if to_string(dict_get_or(entry, "version", "")) == version_name {
+			return true
+		}
+	}
+	return false
+}
+
+func update_versions_yank_state(versions, target_version, yank_value) {
+	updated_versions := []
+	found := false
+	for entry in versions {
+		entry_version := to_string(dict_get_or(entry, "version", ""))
+		if entry_version == target_version {
+			entry["yanked"] := yank_value
+			found = true
+		}
+		updated_versions := push(updated_versions, entry)
+	}
+	return {
+		"found": found,
+		"versions": updated_versions
+	}
+}
+
+func ensure_access_metadata(metadata_doc, fallback_owner) {
+	access_doc := dict_get_or(metadata_doc, "access", {})
+	if type(access_doc) != "dict" {
+		access_doc := {}
+	}
+	owners := dict_get_or(access_doc, "owners", [])
+	if type(owners) != "array" {
+		owners := []
+	}
+	teams := dict_get_or(access_doc, "teams", [])
+	if type(teams) != "array" {
+		teams := []
+	}
+	owner_name := trim(to_string(fallback_owner))
+	if len(owners) == 0 && owner_name != "" {
+		owners := push(owners, {
+			"user": owner_name,
+			"role": "owner"
+		})
+	}
+	access_doc["owners"] := owners
+	access_doc["teams"] := teams
+	metadata_doc["access"] := access_doc
+	return metadata_doc
+}
+
+func upsert_owner_entry(owners, owner_name, role_name) {
+	updated := []
+	replaced := false
+	for entry in owners {
+		if to_string(dict_get_or(entry, "user", "")) == owner_name {
+			entry["role"] := role_name
+			updated := push(updated, entry)
+			replaced = true
+			continue
+		}
+		updated := push(updated, entry)
+	}
+	if replaced == false {
+		updated := push(updated, {
+			"user": owner_name,
+			"role": role_name
+		})
+	}
+	return updated
+}
+
+func remove_owner_entry(owners, owner_name) {
+	updated := []
+	removed := false
+	for entry in owners {
+		if to_string(dict_get_or(entry, "user", "")) == owner_name {
+			removed = true
+			continue
+		}
+		updated := push(updated, entry)
+	}
+	return {
+		"removed": removed,
+		"owners": updated
+	}
+}
+
+func upsert_team_entry(teams, team_name, permission_name) {
+	updated := []
+	replaced := false
+	for entry in teams {
+		if to_string(dict_get_or(entry, "team", "")) == team_name {
+			entry["permission"] := permission_name
+			updated := push(updated, entry)
+			replaced = true
+			continue
+		}
+		updated := push(updated, entry)
+	}
+	if replaced == false {
+		updated := push(updated, {
+			"team": team_name,
+			"permission": permission_name
+		})
+	}
+	return updated
+}
+
+func remove_team_entry(teams, team_name) {
+	updated := []
+	removed := false
+	for entry in teams {
+		if to_string(dict_get_or(entry, "team", "")) == team_name {
+			removed = true
+			continue
+		}
+		updated := push(updated, entry)
+	}
+	return {
+		"removed": removed,
+		"teams": updated
+	}
+}
+
+func owner_entries(metadata_doc) {
+	access_doc := dict_get_or(metadata_doc, "access", {})
+	owners := dict_get_or(access_doc, "owners", [])
+	if type(owners) != "array" {
+		return []
+	}
+	return owners
+}
+
+func is_package_owner(metadata_doc, user_name) {
+	resolved_user := trim(to_string(user_name))
+	if resolved_user == "" {
+		return false
+	}
+	owners := owner_entries(metadata_doc)
+	if len(owners) == 0 {
+		return true
+	}
+	for owner_entry in owners {
+		if to_string(dict_get_or(owner_entry, "user", "")) == resolved_user {
+			return true
+		}
+	}
+	return false
+}
+
+func load_hosted_registry_index(registry_dir) {
+	index_path := registry_dir + "/index.json"
+	if file_exists(index_path) == false {
+		return {
+			"ok": false,
+			"error": "Hosted registry index not found: " + index_path,
+			"index_path": index_path
+		}
+	}
+	loaded := load_registry_index_doc(index_path, to_string(now()))
+	if loaded["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded["error"],
+			"index_path": index_path
+		}
+	}
+	return {
+		"ok": true,
+		"index": loaded["index"],
+		"index_path": index_path
+	}
+}
+
+func resolve_package_metadata_path(registry_dir, package_name, package_entry) {
+	metadata_rel_path := trim(to_string(dict_get_or(package_entry, "metadata_path", "packages/" + package_name + ".json")))
+	if metadata_rel_path == "" {
+		return {
+			"ok": false,
+			"error": "Invalid metadata_path for package `" + package_name + "`: value is empty.",
+			"metadata_rel_path": metadata_rel_path,
+			"metadata_path": ""
+		}
+	}
+	if starts_with(metadata_rel_path, "/") {
+		return {
+			"ok": false,
+			"error": "Invalid metadata_path for package `" + package_name + "`: absolute paths are not allowed.",
+			"metadata_rel_path": metadata_rel_path,
+			"metadata_path": ""
+		}
+	}
+	if index_of(metadata_rel_path, "..") >= 0 {
+		return {
+			"ok": false,
+			"error": "Invalid metadata_path for package `" + package_name + "`: traversal segments are not allowed.",
+			"metadata_rel_path": metadata_rel_path,
+			"metadata_path": ""
+		}
+	}
+	if starts_with(metadata_rel_path, "packages/") == false {
+		return {
+			"ok": false,
+			"error": "Invalid metadata_path for package `" + package_name + "`: path must be under packages/.",
+			"metadata_rel_path": metadata_rel_path,
+			"metadata_path": ""
+		}
+	}
+
+	registry_root := path_absolute(registry_dir)
+	metadata_path := path_absolute(registry_root + "/" + metadata_rel_path)
+	registry_prefix := registry_root + "/"
+	if starts_with(metadata_path, registry_prefix) == false {
+		return {
+			"ok": false,
+			"error": "Invalid metadata_path for package `" + package_name + "`: resolved path escapes registry directory.",
+			"metadata_rel_path": metadata_rel_path,
+			"metadata_path": metadata_path
+		}
+	}
+	return {
+		"ok": true,
+		"metadata_rel_path": metadata_rel_path,
+		"metadata_path": metadata_path
+	}
+}
+
+func can_user_view_package(registry_dir, package_name, package_entry, user_name) {
+	package_private := dict_get_or(package_entry, "private", false) == true
+	if package_private == false {
+		return true
+	}
+	resolved_user := trim(to_string(user_name))
+	if resolved_user == "" {
+		return false
+	}
+	paths := resolve_package_metadata_path(registry_dir, package_name, package_entry)
+	if paths["ok"] == false {
+		return false
+	}
+	metadata_path := paths["metadata_path"]
+	if file_exists(metadata_path) == false {
+		return false
+	}
+	loaded_metadata := load_package_metadata_doc(metadata_path, package_name, {})
+	if loaded_metadata["ok"] == false {
+		return false
+	}
+	metadata_doc := loaded_metadata["metadata"]
+	visibility_name := to_lower(trim(to_string(dict_get_or(metadata_doc, "visibility", ""))))
+	if visibility_name == "" {
+		visibility_name = "public"
+	}
+	if visibility_name != "private" {
+		return true
+	}
+	return is_package_owner(metadata_doc, resolved_user)
+}
+
+export func resolve_registry_index_name(package_name, constraints) {
+	if type(constraints) != "dict" {
+		return {
+			"ok": false,
+			"error": "Stage 2 index constraints must be a dictionary with `index` data.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	index_doc := dict_get_or(constraints, "index", {})
+	lookup := find_index_package(index_doc, package_name)
+	if lookup["ok"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` was not found in index metadata.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	package_entry := lookup["package"]
+	versions := dict_get_or(package_entry, "versions", [])
+	if type(versions) != "array" || len(versions) == 0 {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` has no available versions in index metadata.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	requested_version := trim(to_string(dict_get_or(constraints, "version", "")))
+	resolved_version := requested_version
+	if resolved_version == "" {
+		resolved_version := trim(to_string(dict_get_or(package_entry, "latest", "")))
+	}
+	if resolved_version == "" {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` is missing a usable latest/version selector in index metadata.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	version_lookup := find_version_entry(versions, resolved_version)
+	if version_lookup["ok"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` does not contain version `" + resolved_version + "` in index metadata.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	version_entry := version_lookup["version"]
+	source_value := trim(to_string(dict_get_or(version_entry, "source", "")))
+	ref_value := trim(to_string(dict_get_or(version_entry, "ref", "")))
+	if source_value == "" || ref_value == "" {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` version `" + resolved_version + "` is missing source/ref metadata.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	return {
+		"ok": true,
+		"package": package_name,
+		"version": resolved_version,
+		"source": source_value,
+		"ref": ref_value,
+		"checksum": to_string(dict_get_or(version_entry, "checksum", "")),
+		"signature": to_string(dict_get_or(version_entry, "signature", "")),
+		"signing_key": to_string(dict_get_or(version_entry, "signing_key", "")),
+		"metadata_path": to_string(dict_get_or(package_entry, "metadata_path", "")),
+		"constraints": constraints
+	}
+}
+
+export func search_registry_index(query, constraints) {
+	if type(constraints) != "dict" {
+		return {
+			"ok": false,
+			"error": "Stage 2 search constraints must be a dictionary with `index` data.",
+			"query": query,
+			"constraints": constraints
+		}
+	}
+	index_doc := dict_get_or(constraints, "index", {})
+	if type(index_doc) != "dict" {
+		return {
+			"ok": false,
+			"error": "Stage 2 search index metadata must be a dictionary.",
+			"query": query,
+			"constraints": constraints
+		}
+	}
+	query_text := to_lower(trim(to_string(query)))
+	results := []
+	for package_entry in index_packages(index_doc) {
+		name_value := trim(to_string(dict_get_or(package_entry, "name", "")))
+		if name_value == "" {
+			continue
+		}
+		if query_text != "" && index_of(to_lower(name_value), query_text) < 0 {
+			continue
+		}
+		result_entry := {
+			"name": name_value,
+			"latest": trim(to_string(dict_get_or(package_entry, "latest", ""))),
+			"metadata_path": trim(to_string(dict_get_or(package_entry, "metadata_path", "")))
+		}
+		results := push(results, result_entry)
+	}
+	if len(results) == 0 {
+		return {
+			"ok": false,
+			"error": "No packages matched query `" + query_text + "` in static index metadata.",
+			"query": query_text,
+			"results": []
+		}
+	}
+	return {
+		"ok": true,
+		"query": query_text,
+		"results": results
+	}
+}
+
+export func resolve_hosted_registry_name(package_name, constraints) {
+	if type(constraints) != "dict" {
+		return {
+			"ok": false,
+			"error": "Hosted registry resolver constraints must be a dictionary.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	resolved_package := trim(to_string(package_name))
+	if resolved_package == "" {
+		return {
+			"ok": false,
+			"error": "Hosted registry resolver requires a non-empty package name.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
+	package_check := normalize_identifier_input(resolved_package, "Package name", false)
+	if package_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": package_check["error"],
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	resolved_package = package_check["value"]
+	registry_dir := trim(to_string(dict_get_or(constraints, "registry_dir", "")))
+	if registry_dir == "" {
+		return {
+			"ok": false,
+			"error": "Hosted registry resolver requires `registry_dir` in constraints.",
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	loaded_index := load_hosted_registry_index(registry_dir)
+	if loaded_index["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_index["error"],
+			"package": resolved_package,
+			"index_path": dict_get_or(loaded_index, "index_path", ""),
+			"constraints": constraints
+		}
+	}
+	lookup := find_index_package(loaded_index["index"], resolved_package)
+	if lookup["ok"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` was not found in hosted registry index.",
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	package_entry := lookup["package"]
+	request_user := trim(to_string(dict_get_or(constraints, "user", "")))
+	user_check := normalize_identifier_input(request_user, "User name", true)
+	if user_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": user_check["error"],
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	request_user = user_check["value"]
+	if dict_get_or(package_entry, "private", false) == true {
+		metadata_lookup := hosted_api_package_metadata_endpoint(resolved_package, {
+			"registry_dir": registry_dir,
+			"user": request_user
+		})
+		if metadata_lookup["ok"] == false {
+			return {
+				"ok": false,
+				"error": metadata_lookup["error"],
+				"package": resolved_package,
+				"constraints": constraints
+			}
+		}
+	}
+	versions := dict_get_or(package_entry, "versions", [])
+	if type(versions) != "array" || len(versions) == 0 {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` has no available versions in hosted registry index.",
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	requested_version := trim(to_string(dict_get_or(constraints, "version", "")))
+	resolved_version := requested_version
+	if resolved_version == "" {
+		resolved_version := trim(to_string(dict_get_or(package_entry, "latest", "")))
+	}
+	if resolved_version == "" {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` is missing a usable latest/version selector in hosted registry index.",
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	version_lookup := find_version_entry(versions, resolved_version)
+	if version_lookup["ok"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` does not contain version `" + resolved_version + "` in hosted registry index.",
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	version_entry := version_lookup["version"]
+	source_value := trim(to_string(dict_get_or(version_entry, "source", "")))
+	ref_value := trim(to_string(dict_get_or(version_entry, "ref", "")))
+	if source_value == "" || ref_value == "" {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` version `" + resolved_version + "` is missing source/ref metadata.",
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
+	visibility_name := "public"
+	if dict_get_or(package_entry, "private", false) == true {
+		visibility_name = "private"
+	}
+	return {
+		"ok": true,
+		"package": resolved_package,
+		"version": resolved_version,
+		"source": source_value,
+		"ref": ref_value,
+		"checksum": to_string(dict_get_or(version_entry, "checksum", "")),
+		"signature": to_string(dict_get_or(version_entry, "signature", "")),
+		"signing_key": to_string(dict_get_or(version_entry, "signing_key", "")),
+		"metadata_path": to_string(dict_get_or(package_entry, "metadata_path", "")),
+		"visibility": visibility_name,
+		"constraints": constraints
+	}
+}
+
+export func publish_package(package_path, publish_options) {
+	if type(publish_options) != "dict" {
+		return {
+			"ok": false,
+			"error": "Publish options must be a dictionary.",
+			"package_path": package_path,
+			"options": publish_options
+		}
+	}
+	token_value := trim(to_string(dict_get_or(publish_options, "token", "")))
+	if token_value == "" {
+		return {
+			"ok": false,
+			"error": "Publishing requires a non-empty auth token.",
+			"package_path": package_path,
+			"options": publish_options
+		}
+	}
+	manifest_obj := dict_get_or(publish_options, "manifest", {})
+	if type(manifest_obj) != "dict" {
+		return {
+			"ok": false,
+			"error": "Publishing requires a manifest object in publish options.",
+			"package_path": package_path,
+			"options": publish_options
+		}
+	}
+	package_table := dict_get_or(manifest_obj, "package", {})
+	package_name := trim(to_string(dict_get_or(package_table, "name", "")))
+	package_version := trim(to_string(dict_get_or(package_table, "version", "")))
+	if package_name == "" || package_version == "" {
+		return {
+			"ok": false,
+			"error": "Publishing requires package name and version in manifest [package].",
+			"package_path": package_path,
+			"options": publish_options
+		}
+	}
+	package_name_check := validate_identifier(package_name, "Package name")
+	if package_name_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": package_name_check["error"],
+			"package": package_name,
+			"version": package_version
+		}
+	}
+	package_name = package_name_check["value"]
+	registry_name := trim(to_string(dict_get_or(publish_options, "registry", "default")))
+	if registry_name == "" {
+		registry_name := "default"
+	}
+	registry_name_check := validate_identifier(registry_name, "Registry name")
+	if registry_name_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": registry_name_check["error"],
+			"package": package_name,
+			"version": package_version,
+			"registry": registry_name
+		}
+	}
+	registry_name = registry_name_check["value"]
+	user_name := trim(to_string(dict_get_or(publish_options, "user", "default")))
+	if user_name == "" {
+		user_name := "default"
+	}
+	user_name_check := validate_identifier(user_name, "User name")
+	if user_name_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": user_name_check["error"],
+			"package": package_name,
+			"version": package_version,
+			"user": user_name
+		}
+	}
+	user_name = user_name_check["value"]
+	raw_registry_dir := trim(to_string(dict_get_or(publish_options, "registry_dir", "")))
+	registry_dir := raw_registry_dir
+	if registry_dir == "" {
+		registry_dir := package_path + "/.kennel_registry"
+	}
+	if starts_with(registry_dir, "/") == false {
+		registry_dir := package_path + "/" + registry_dir
+	}
+	packages_dir := registry_dir + "/packages"
+	mkdir_result := run_shell("mkdir -p " + shell_quote(packages_dir))
+	if command_ok(mkdir_result) == false {
+		return {
+			"ok": false,
+			"error": "Failed to prepare registry package directory: " + trim(to_string(mkdir_result.stderr)),
+			"package": package_name,
+			"version": package_version,
+			"registry_dir": registry_dir
+		}
+	}
+	index_path := registry_dir + "/index.json"
+	metadata_rel_path := "packages/" + package_name + ".json"
+	metadata_path := registry_dir + "/" + metadata_rel_path
+	metadata_exists := file_exists(metadata_path)
+	timestamp_value := to_string(now())
+	source_value := trim(to_string(dict_get_or(publish_options, "source", "")))
+	if source_value == "" {
+		source_value := "file:" + package_path
+	}
+	ref_value := trim(to_string(dict_get_or(publish_options, "ref", "")))
+	if ref_value == "" {
+		ref_value := package_version
+	}
+	requested_visibility := to_lower(trim(to_string(dict_get_or(publish_options, "visibility", ""))))
+	trust_doc := dict_get_or(manifest_obj, "trust", {})
+	if type(trust_doc) != "dict" {
+		trust_doc := {}
+	}
+	trust_checksum := trim(to_string(dict_get_or(publish_options, "checksum", dict_get_or(trust_doc, "checksum", ""))))
+	trust_signature := trim(to_string(dict_get_or(publish_options, "signature", dict_get_or(trust_doc, "signature", ""))))
+	trust_signing_key := trim(to_string(dict_get_or(publish_options, "signing_key", dict_get_or(trust_doc, "signing_key", ""))))
+	if requested_visibility != "" && requested_visibility != "public" && requested_visibility != "private" {
+		return {
+			"ok": false,
+			"error": "Visibility must be `public` or `private` when provided.",
+			"package": package_name,
+			"version": package_version
+		}
+	}
+	if trust_signature != "" && trust_signing_key == "" {
+		return {
+			"ok": false,
+			"error": "Publishing a signature requires a signing_key in manifest [trust] or publish options.",
+			"package": package_name,
+			"version": package_version
+		}
+	}
+	if trust_checksum != "" {
+		checksum_check := parse_checksum(trust_checksum)
+		if checksum_check["ok"] == false {
+			return {
+				"ok": false,
+				"error": "Invalid trust checksum format: " + to_string(checksum_check["error"]),
+				"package": package_name,
+				"version": package_version
+			}
+		}
+		trust_checksum = checksum_check["normalized"]
+	}
+	if trust_signature != "" && is_base64_text(trust_signature) == false {
+		return {
+			"ok": false,
+			"error": "Trust signature must be base64-encoded.",
+			"package": package_name,
+			"version": package_version
+		}
+	}
+	if trust_signing_key != "" && is_safe_signing_key(trust_signing_key) == false {
+		return {
+			"ok": false,
+			"error": "Trust signing_key contains unsupported characters.",
+			"package": package_name,
+			"version": package_version
+		}
+	}
+	loaded_metadata := load_package_metadata_doc(metadata_path, package_name, package_table)
+	if loaded_metadata["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_metadata["error"],
+			"package": package_name,
+			"version": package_version,
+			"metadata_path": metadata_path
+		}
+	}
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], user_name)
+	if metadata_exists && is_package_owner(metadata_doc, user_name) == false {
+		return {
+			"ok": false,
+			"error": "Only package owners can publish new versions for `" + package_name + "`.",
+			"package": package_name,
+			"version": package_version,
+			"user": user_name
+		}
+	}
+	existing_visibility := to_lower(trim(to_string(dict_get_or(metadata_doc, "visibility", ""))))
+	effective_visibility := requested_visibility
+	if effective_visibility == "" {
+		if existing_visibility != "" {
+			effective_visibility = existing_visibility
+		} else {
+			effective_visibility = "public"
+		}
+	}
+	if existing_visibility == "private" && is_package_owner(metadata_doc, user_name) == false {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` is private and can only be published by an owner.",
+			"package": package_name,
+			"version": package_version,
+			"user": user_name
+		}
+	}
+	is_private := effective_visibility == "private"
+	version_entry := {
+		"version": package_version,
+		"source": source_value,
+		"ref": ref_value,
+		"published_at": timestamp_value,
+		"private": is_private
+	}
+	if trust_checksum != "" {
+		version_entry["checksum"] := trust_checksum
+	}
+	if trust_signature != "" {
+		version_entry["signature"] := trust_signature
+	}
+	if trust_signing_key != "" {
+		version_entry["signing_key"] := trust_signing_key
+	}
+	loaded_index := load_registry_index_doc(index_path, timestamp_value)
+	if loaded_index["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_index["error"],
+			"package": package_name,
+			"version": package_version,
+			"index_path": index_path
+		}
+	}
+	index_doc := loaded_index["index"]
+	lookup := find_index_package(index_doc, package_name)
+	package_entry := {
+		"name": package_name,
+		"latest": "",
+		"metadata_path": metadata_rel_path,
+		"versions": []
+	}
+	if lookup["ok"] {
+		package_entry := lookup["package"]
+	}
+	package_versions := dict_get_or(package_entry, "versions", [])
+	if type(package_versions) != "array" {
+		package_versions := []
+	}
+	if has_published_version(package_versions, package_version) {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` already contains version `" + package_version + "` in registry index.",
+			"package": package_name,
+			"version": package_version,
+			"index_path": index_path
+		}
+	}
+	package_versions := push(package_versions, version_entry)
+	package_entry["name"] := package_name
+	package_entry["latest"] := package_version
+	package_entry["metadata_path"] := metadata_rel_path
+	package_entry["private"] := is_private
+	package_entry["versions"] := package_versions
+	index_packages_updated := replace_index_package(index_packages(index_doc), package_name, package_entry)
+	index_doc["packages"] := index_packages_updated
+	index_doc["generated_at"] := timestamp_value
+	metadata_versions := dict_get_or(metadata_doc, "versions", [])
+	if type(metadata_versions) != "array" {
+		metadata_versions := []
+	}
+	if has_published_version(metadata_versions, package_version) {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` already contains version `" + package_version + "` in package metadata.",
+			"package": package_name,
+			"version": package_version,
+			"metadata_path": metadata_path
+		}
+	}
+	metadata_versions := push(metadata_versions, version_entry)
+	metadata_doc["name"] := package_name
+	metadata_doc["latest"] := package_version
+	description_value := trim(to_string(dict_get_or(package_table, "description", "")))
+	if description_value != "" {
+		metadata_doc["description"] := description_value
+	}
+	repository_value := trim(to_string(dict_get_or(package_table, "repository", "")))
+	if repository_value != "" {
+		metadata_doc["repository"] := repository_value
+	}
+	metadata_doc["visibility"] := effective_visibility
+	if trust_signing_key != "" {
+		metadata_doc["signing_key"] := trust_signing_key
+	}
+	metadata_doc["versions"] := metadata_versions
+	persisted_pair := persist_json_pair_atomic(index_path, index_doc, metadata_path, metadata_doc, publish_options)
+	if persisted_pair["ok"] == false {
+		return {
+			"ok": false,
+			"error": persisted_pair["error"],
+			"package": package_name,
+			"version": package_version,
+			"index_path": index_path,
+			"metadata_path": metadata_path
+		}
+	}
+	return {
+		"ok": true,
+		"package": package_name,
+		"version": package_version,
+		"registry": registry_name,
+		"user": user_name,
+		"registry_dir": registry_dir,
+		"index_path": index_path,
+		"metadata_path": metadata_path,
+		"visibility": effective_visibility,
+		"source": source_value,
+		"ref": ref_value,
+		"checksum": trust_checksum,
+		"signature": trust_signature,
+		"signing_key": trust_signing_key
+	}
+}
+
+export func manage_package_access(package_name, access_action, access_options) {
+	resolved_package := trim(to_string(package_name))
+	if resolved_package == "" {
+		return {
+			"ok": false,
+			"error": "Access management requires a non-empty package name."
+		}
+	}
+	package_check := normalize_identifier_input(resolved_package, "Package name", false)
+	if package_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": package_check["error"],
+			"package": resolved_package
+		}
+	}
+	resolved_package = package_check["value"]
+	if type(access_options) != "dict" {
+		return {
+			"ok": false,
+			"error": "Access options must be a dictionary.",
+			"package": resolved_package,
+			"options": access_options
+		}
+	}
+	action_name := to_lower(trim(to_string(access_action)))
+	registry_dir := trim(to_string(dict_get_or(access_options, "registry_dir", "")))
+	if registry_dir == "" {
+		return {
+			"ok": false,
+			"error": "Access management requires `registry_dir` in options.",
+			"package": resolved_package
+		}
+	}
+	fallback_owner := trim(to_string(dict_get_or(access_options, "user", "")))
+	if fallback_owner == "" {
+		return {
+			"ok": false,
+			"error": "Access management requires user context in options.",
+			"package": resolved_package
+		}
+	}
+	fallback_owner_check := normalize_identifier_input(fallback_owner, "User name", false)
+	if fallback_owner_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": fallback_owner_check["error"],
+			"package": resolved_package,
+			"user": fallback_owner
+		}
+	}
+	fallback_owner = fallback_owner_check["value"]
+	metadata_rel_path := "packages/" + resolved_package + ".json"
+	index_path := registry_dir + "/index.json"
+	if file_exists(index_path) {
+		loaded_index := load_registry_index_doc(index_path, to_string(now()))
+		if loaded_index["ok"] == false {
+			return {
+				"ok": false,
+				"error": loaded_index["error"],
+				"package": resolved_package,
+				"index_path": index_path
+			}
+		}
+		lookup := find_index_package(loaded_index["index"], resolved_package)
+		if lookup["ok"] {
+			metadata_rel_path := trim(to_string(dict_get_or(lookup["package"], "metadata_path", metadata_rel_path)))
+		}
+	}
+	metadata_paths := resolve_package_metadata_path(registry_dir, resolved_package, {
+		"metadata_path": metadata_rel_path
+	})
+	if metadata_paths["ok"] == false {
+		return {
+			"ok": false,
+			"error": metadata_paths["error"],
+			"package": resolved_package
+		}
+	}
+	metadata_path := metadata_paths["metadata_path"]
+	if file_exists(metadata_path) == false {
+		return {
+			"ok": false,
+			"error": "Package metadata file not found for access management: " + metadata_path,
+			"package": resolved_package,
+			"metadata_path": metadata_path
+		}
+	}
+	loaded_metadata := load_package_metadata_doc(metadata_path, resolved_package, {})
+	if loaded_metadata["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_metadata["error"],
+			"package": resolved_package,
+			"metadata_path": metadata_path
+		}
+	}
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], fallback_owner)
+	if is_package_owner(metadata_doc, fallback_owner) == false {
+		return {
+			"ok": false,
+			"error": "Only package owners can manage access for `" + resolved_package + "`.",
+			"package": resolved_package,
+			"user": fallback_owner,
+			"action": action_name
+		}
+	}
+	access_doc := dict_get_or(metadata_doc, "access", {})
+	owners := dict_get_or(access_doc, "owners", [])
+	if type(owners) != "array" {
+		owners := []
+	}
+	teams := dict_get_or(access_doc, "teams", [])
+	if type(teams) != "array" {
+		teams := []
+	}
+	target_name := trim(to_string(dict_get_or(access_options, "target", "")))
+	mutated := false
+	if action_name == "owner-add" {
+		if target_name == "" {
+			return {
+				"ok": false,
+				"error": "owner-add requires a target user.",
+				"package": resolved_package
+			}
+		}
+		target_check := normalize_identifier_input(target_name, "Access target", false)
+		if target_check["ok"] == false {
+			return {
+				"ok": false,
+				"error": target_check["error"],
+				"package": resolved_package,
+				"target": target_name
+			}
+		}
+		target_name = target_check["value"]
+		role_name := trim(to_string(dict_get_or(access_options, "role", "owner")))
+		if role_name == "" {
+			role_name := "owner"
+		}
+		owners := upsert_owner_entry(owners, target_name, role_name)
+		mutated = true
+	} else if action_name == "owner-remove" {
+		if target_name == "" {
+			return {
+				"ok": false,
+				"error": "owner-remove requires a target user.",
+				"package": resolved_package
+			}
+		}
+		target_check := normalize_identifier_input(target_name, "Access target", false)
+		if target_check["ok"] == false {
+			return {
+				"ok": false,
+				"error": target_check["error"],
+				"package": resolved_package,
+				"target": target_name
+			}
+		}
+		target_name = target_check["value"]
+		removed_owner := remove_owner_entry(owners, target_name)
+		if removed_owner["removed"] == false {
+			return {
+				"ok": false,
+				"error": "Owner `" + target_name + "` is not assigned to package `" + resolved_package + "`.",
+				"package": resolved_package,
+				"target": target_name
+			}
+		}
+		if len(removed_owner["owners"]) == 0 {
+			return {
+				"ok": false,
+				"error": "Cannot remove the last owner from package `" + resolved_package + "`.",
+				"package": resolved_package,
+				"target": target_name
+			}
+		}
+		owners := removed_owner["owners"]
+		mutated = true
+	} else if action_name == "team-add" {
+		if target_name == "" {
+			return {
+				"ok": false,
+				"error": "team-add requires a target team.",
+				"package": resolved_package
+			}
+		}
+		target_check := normalize_identifier_input(target_name, "Access target", false)
+		if target_check["ok"] == false {
+			return {
+				"ok": false,
+				"error": target_check["error"],
+				"package": resolved_package,
+				"target": target_name
+			}
+		}
+		target_name = target_check["value"]
+		permission_name := trim(to_string(dict_get_or(access_options, "permission", "publish")))
+		if permission_name == "" {
+			permission_name := "publish"
+		}
+		teams := upsert_team_entry(teams, target_name, permission_name)
+		mutated = true
+	} else if action_name == "team-remove" {
+		if target_name == "" {
+			return {
+				"ok": false,
+				"error": "team-remove requires a target team.",
+				"package": resolved_package
+			}
+		}
+		target_check := normalize_identifier_input(target_name, "Access target", false)
+		if target_check["ok"] == false {
+			return {
+				"ok": false,
+				"error": target_check["error"],
+				"package": resolved_package,
+				"target": target_name
+			}
+		}
+		target_name = target_check["value"]
+		removed_team := remove_team_entry(teams, target_name)
+		if removed_team["removed"] == false {
+			return {
+				"ok": false,
+				"error": "Team `" + target_name + "` is not assigned to package `" + resolved_package + "`.",
+				"package": resolved_package,
+				"target": target_name
+			}
+		}
+		teams := removed_team["teams"]
+		mutated = true
+	} else if action_name == "list" {
+		# No mutation required.
+	} else {
+		return {
+			"ok": false,
+			"error": "Unsupported access action: " + action_name,
+			"package": resolved_package,
+			"action": access_action
+		}
+	}
+	access_doc["owners"] := owners
+	access_doc["teams"] := teams
+	metadata_doc["access"] := access_doc
+	if mutated {
+		write_file(metadata_path, to_json(metadata_doc), true)
+	}
+	return {
+		"ok": true,
+		"action": action_name,
+		"package": resolved_package,
+		"target": target_name,
+		"owners": owners,
+		"teams": teams,
+		"metadata_path": metadata_path
+	}
+}
+
+export func set_package_visibility(package_name, visibility_name, visibility_options) {
+	resolved_package := trim(to_string(package_name))
+	resolved_visibility := to_lower(trim(to_string(visibility_name)))
+	if resolved_package == "" {
+		return {
+			"ok": false,
+			"error": "Visibility update requires a non-empty package name."
+		}
+	}
+	package_check := normalize_identifier_input(resolved_package, "Package name", false)
+	if package_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": package_check["error"],
+			"package": resolved_package
+		}
+	}
+	resolved_package = package_check["value"]
+	if resolved_visibility != "public" && resolved_visibility != "private" {
+		return {
+			"ok": false,
+			"error": "Visibility must be `public` or `private`.",
+			"package": resolved_package,
+			"visibility": visibility_name
+		}
+	}
+	if type(visibility_options) != "dict" {
+		return {
+			"ok": false,
+			"error": "Visibility options must be a dictionary.",
+			"package": resolved_package,
+			"options": visibility_options
+		}
+	}
+	registry_dir := trim(to_string(dict_get_or(visibility_options, "registry_dir", "")))
+	if registry_dir == "" {
+		return {
+			"ok": false,
+			"error": "Visibility update requires `registry_dir` in options.",
+			"package": resolved_package
+		}
+	}
+	user_name := trim(to_string(dict_get_or(visibility_options, "user", "")))
+	if user_name == "" {
+		return {
+			"ok": false,
+			"error": "Visibility update requires user context in options.",
+			"package": resolved_package
+		}
+	}
+	user_check := normalize_identifier_input(user_name, "User name", false)
+	if user_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": user_check["error"],
+			"package": resolved_package,
+			"user": user_name
+		}
+	}
+	user_name = user_check["value"]
+	index_path := registry_dir + "/index.json"
+	if file_exists(index_path) == false {
+		return {
+			"ok": false,
+			"error": "Registry index not found for visibility update: " + index_path,
+			"package": resolved_package
+		}
+	}
+	loaded_index := load_registry_index_doc(index_path, to_string(now()))
+	if loaded_index["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_index["error"],
+			"package": resolved_package,
+			"index_path": index_path
+		}
+	}
+	index_doc := loaded_index["index"]
+	lookup := find_index_package(index_doc, resolved_package)
+	if lookup["ok"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` was not found in registry index.",
+			"package": resolved_package,
+			"index_path": index_path
+		}
+	}
+	package_entry := lookup["package"]
+	metadata_paths := resolve_package_metadata_path(registry_dir, resolved_package, package_entry)
+	if metadata_paths["ok"] == false {
+		return {
+			"ok": false,
+			"error": metadata_paths["error"],
+			"package": resolved_package
+		}
+	}
+	metadata_path := metadata_paths["metadata_path"]
+	if file_exists(metadata_path) == false {
+		return {
+			"ok": false,
+			"error": "Package metadata not found for visibility update: " + metadata_path,
+			"package": resolved_package
+		}
+	}
+	loaded_metadata := load_package_metadata_doc(metadata_path, resolved_package, {})
+	if loaded_metadata["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_metadata["error"],
+			"package": resolved_package,
+			"metadata_path": metadata_path
+		}
+	}
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], user_name)
+	if is_package_owner(metadata_doc, user_name) == false {
+		return {
+			"ok": false,
+			"error": "Only package owners can update visibility for `" + resolved_package + "`.",
+			"package": resolved_package,
+			"user": user_name
+		}
+	}
+	metadata_doc["visibility"] := resolved_visibility
+	metadata_versions := dict_get_or(metadata_doc, "versions", [])
+	if type(metadata_versions) != "array" {
+		metadata_versions := []
+	}
+	updated_metadata_versions := []
+	for entry in metadata_versions {
+		entry["private"] := resolved_visibility == "private"
+		updated_metadata_versions := push(updated_metadata_versions, entry)
+	}
+	metadata_doc["versions"] := updated_metadata_versions
+	package_entry["private"] := resolved_visibility == "private"
+	index_versions := dict_get_or(package_entry, "versions", [])
+	if type(index_versions) != "array" {
+		index_versions := []
+	}
+	updated_index_versions := []
+	for entry in index_versions {
+		entry["private"] := resolved_visibility == "private"
+		updated_index_versions := push(updated_index_versions, entry)
+	}
+	package_entry["versions"] := updated_index_versions
+	index_doc["packages"] := replace_index_package(index_packages(index_doc), resolved_package, package_entry)
+	index_doc["generated_at"] := to_string(now())
+	persisted_pair := persist_json_pair_atomic(index_path, index_doc, metadata_path, metadata_doc, visibility_options)
+	if persisted_pair["ok"] == false {
+		return {
+			"ok": false,
+			"error": persisted_pair["error"],
+			"package": resolved_package,
+			"visibility": resolved_visibility,
+			"index_path": index_path,
+			"metadata_path": metadata_path
+		}
+	}
+	return {
+		"ok": true,
+		"package": resolved_package,
+		"visibility": resolved_visibility,
+		"index_path": index_path,
+		"metadata_path": metadata_path
+	}
+}
+
+export func hosted_api_search_endpoint(query, endpoint_options) {
+	if type(endpoint_options) != "dict" {
+		return {
+			"ok": false,
+			"error": "Endpoint options must be a dictionary.",
+			"query": query,
+			"options": endpoint_options
+		}
+	}
+	registry_dir := trim(to_string(dict_get_or(endpoint_options, "registry_dir", "")))
+	if registry_dir == "" {
+		return {
+			"ok": false,
+			"error": "Hosted API search requires `registry_dir` in options.",
+			"query": query
+		}
+	}
+	loaded_index := load_hosted_registry_index(registry_dir)
+	if loaded_index["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_index["error"],
+			"query": query,
+			"index_path": dict_get_or(loaded_index, "index_path", "")
+		}
+	}
+	query_text := to_lower(trim(to_string(query)))
+	request_user := trim(to_string(dict_get_or(endpoint_options, "user", "")))
+	results := []
+	for package_entry in index_packages(loaded_index["index"]) {
+		package_name := trim(to_string(dict_get_or(package_entry, "name", "")))
+		if package_name == "" {
+			continue
+		}
+		if query_text != "" && index_of(to_lower(package_name), query_text) < 0 {
+			continue
+		}
+		if can_user_view_package(registry_dir, package_name, package_entry, request_user) == false {
+			continue
+		}
+		visibility_name := "public"
+		if dict_get_or(package_entry, "private", false) == true {
+			visibility_name = "private"
+		}
+		results := push(results, {
+			"name": package_name,
+			"latest": trim(to_string(dict_get_or(package_entry, "latest", ""))),
+			"metadata_path": trim(to_string(dict_get_or(package_entry, "metadata_path", ""))),
+			"visibility": visibility_name
+		})
+	}
+	return {
+		"ok": true,
+		"endpoint": "/api/v1/search",
+		"query": query_text,
+		"results": results
+	}
+}
+
+export func hosted_api_package_metadata_endpoint(package_name, endpoint_options) {
+	resolved_package := trim(to_string(package_name))
+	if resolved_package == "" {
+		return {
+			"ok": false,
+			"error": "Package metadata endpoint requires a non-empty package name."
+		}
+	}
+	package_check := normalize_identifier_input(resolved_package, "Package name", false)
+	if package_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": package_check["error"],
+			"package": resolved_package
+		}
+	}
+	resolved_package = package_check["value"]
+	if type(endpoint_options) != "dict" {
+		return {
+			"ok": false,
+			"error": "Endpoint options must be a dictionary.",
+			"package": resolved_package,
+			"options": endpoint_options
+		}
+	}
+	registry_dir := trim(to_string(dict_get_or(endpoint_options, "registry_dir", "")))
+	if registry_dir == "" {
+		return {
+			"ok": false,
+			"error": "Package metadata endpoint requires `registry_dir` in options.",
+			"package": resolved_package
+		}
+	}
+	loaded_index := load_hosted_registry_index(registry_dir)
+	if loaded_index["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_index["error"],
+			"package": resolved_package,
+			"index_path": dict_get_or(loaded_index, "index_path", "")
+		}
+	}
+	lookup := find_index_package(loaded_index["index"], resolved_package)
+	if lookup["ok"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` was not found in hosted registry index.",
+			"package": resolved_package
+		}
+	}
+	package_entry := lookup["package"]
+	paths := resolve_package_metadata_path(registry_dir, resolved_package, package_entry)
+	if paths["ok"] == false {
+		return {
+			"ok": false,
+			"error": paths["error"],
+			"package": resolved_package
+		}
+	}
+	metadata_path := paths["metadata_path"]
+	if file_exists(metadata_path) == false {
+		return {
+			"ok": false,
+			"error": "Package metadata not found: " + metadata_path,
+			"package": resolved_package
+		}
+	}
+	loaded_metadata := load_package_metadata_doc(metadata_path, resolved_package, {})
+	if loaded_metadata["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_metadata["error"],
+			"package": resolved_package,
+			"metadata_path": metadata_path
+		}
+	}
+	metadata_doc := loaded_metadata["metadata"]
+	visibility_name := to_lower(trim(to_string(dict_get_or(metadata_doc, "visibility", ""))))
+	if visibility_name == "" {
+		if dict_get_or(package_entry, "private", false) == true {
+			visibility_name = "private"
+		} else {
+			visibility_name = "public"
+		}
+	}
+	request_user := trim(to_string(dict_get_or(endpoint_options, "user", "")))
+	user_check := normalize_identifier_input(request_user, "User name", true)
+	if user_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": user_check["error"],
+			"package": resolved_package
+		}
+	}
+	request_user = user_check["value"]
+	if visibility_name == "private" && is_package_owner(metadata_doc, request_user) == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` is private and requires owner access.",
+			"package": resolved_package
+		}
+	}
+	return {
+		"ok": true,
+		"endpoint": "/api/v1/packages/" + resolved_package,
+		"package": resolved_package,
+		"visibility": visibility_name,
+		"metadata": metadata_doc,
+		"metadata_path": metadata_path
+	}
+}
+
+export func yank_package_version(package_name, version_name, yank_options) {
+	resolved_package := trim(to_string(package_name))
+	resolved_version := trim(to_string(version_name))
+	if resolved_package == "" || resolved_version == "" {
+		return {
+			"ok": false,
+			"error": "Yank requires non-empty package name and version."
+		}
+	}
+	package_check := normalize_identifier_input(resolved_package, "Package name", false)
+	if package_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": package_check["error"],
+			"package": resolved_package,
+			"version": resolved_version
+		}
+	}
+	resolved_package = package_check["value"]
+	if type(yank_options) != "dict" {
+		return {
+			"ok": false,
+			"error": "Yank options must be a dictionary.",
+			"package": resolved_package,
+			"version": resolved_version,
+			"options": yank_options
+		}
+	}
+	registry_dir := trim(to_string(dict_get_or(yank_options, "registry_dir", "")))
+	user_name := trim(to_string(dict_get_or(yank_options, "user", "")))
+	if user_name == "" {
+		return {
+			"ok": false,
+			"error": "Yank requires user context in options.",
+			"package": resolved_package,
+			"version": resolved_version
+		}
+	}
+	user_check := normalize_identifier_input(user_name, "User name", false)
+	if user_check["ok"] == false {
+		return {
+			"ok": false,
+			"error": user_check["error"],
+			"package": resolved_package,
+			"version": resolved_version,
+			"user": user_name
+		}
+	}
+	user_name = user_check["value"]
+	if registry_dir == "" {
+		return {
+			"ok": false,
+			"error": "Yank requires `registry_dir` in options.",
+			"package": resolved_package,
+			"version": resolved_version
+		}
+	}
+	yank_value := true
+	if has_key(yank_options, "yank") {
+		yank_value := yank_options["yank"] == true
+	}
+	index_path := registry_dir + "/index.json"
+	if file_exists(index_path) == false {
+		return {
+			"ok": false,
+			"error": "Registry index not found for yank operation: " + index_path,
+			"package": resolved_package,
+			"version": resolved_version
+		}
+	}
+	loaded_index := load_registry_index_doc(index_path, to_string(now()))
+	if loaded_index["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_index["error"],
+			"package": resolved_package,
+			"version": resolved_version,
+			"index_path": index_path
+		}
+	}
+	index_doc := loaded_index["index"]
+	lookup := find_index_package(index_doc, resolved_package)
+	if lookup["ok"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` was not found in registry index.",
+			"package": resolved_package,
+			"version": resolved_version,
+			"index_path": index_path
+		}
+	}
+	index_package_entry := lookup["package"]
+	index_versions := dict_get_or(index_package_entry, "versions", [])
+	if type(index_versions) != "array" {
+		index_versions := []
+	}
+	index_update := update_versions_yank_state(index_versions, resolved_version, yank_value)
+	if index_update["found"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` does not contain version `" + resolved_version + "` in registry index.",
+			"package": resolved_package,
+			"version": resolved_version,
+			"index_path": index_path
+		}
+	}
+	metadata_paths := resolve_package_metadata_path(registry_dir, resolved_package, index_package_entry)
+	if metadata_paths["ok"] == false {
+		return {
+			"ok": false,
+			"error": metadata_paths["error"],
+			"package": resolved_package,
+			"version": resolved_version,
+			"index_path": index_path
+		}
+	}
+	metadata_path := metadata_paths["metadata_path"]
+	if file_exists(metadata_path) == false {
+		return {
+			"ok": false,
+			"error": "Package metadata file not found for yank operation: " + metadata_path,
+			"package": resolved_package,
+			"version": resolved_version,
+			"index_path": index_path
+		}
+	}
+	loaded_metadata := load_package_metadata_doc(metadata_path, resolved_package, {})
+	if loaded_metadata["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded_metadata["error"],
+			"package": resolved_package,
+			"version": resolved_version,
+			"metadata_path": metadata_path
+		}
+	}
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], user_name)
+	if is_package_owner(metadata_doc, user_name) == false {
+		return {
+			"ok": false,
+			"error": "Only package owners can yank versions for `" + resolved_package + "`.",
+			"package": resolved_package,
+			"version": resolved_version,
+			"user": user_name
+		}
+	}
+	metadata_versions := dict_get_or(metadata_doc, "versions", [])
+	if type(metadata_versions) != "array" {
+		metadata_versions := []
+	}
+	metadata_update := update_versions_yank_state(metadata_versions, resolved_version, yank_value)
+	if metadata_update["found"] == false {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` does not contain version `" + resolved_version + "` in package metadata.",
+			"package": resolved_package,
+			"version": resolved_version,
+			"metadata_path": metadata_path
+		}
+	}
+	metadata_doc["versions"] := metadata_update["versions"]
+	index_package_entry["versions"] := index_update["versions"]
+	index_doc["packages"] := replace_index_package(index_packages(index_doc), resolved_package, index_package_entry)
+	index_doc["generated_at"] := to_string(now())
+	persisted_pair := persist_json_pair_atomic(index_path, index_doc, metadata_path, metadata_doc, yank_options)
+	if persisted_pair["ok"] == false {
+		return {
+			"ok": false,
+			"error": persisted_pair["error"],
+			"package": resolved_package,
+			"version": resolved_version,
+			"index_path": index_path,
+			"metadata_path": metadata_path
+		}
+	}
+	action_name := "yank"
+	if yank_value == false {
+		action_name := "unyank"
+	}
+	return {
+		"ok": true,
+		"action": action_name,
+		"package": resolved_package,
+		"version": resolved_version,
+		"yanked": yank_value,
+		"index_path": index_path,
+		"metadata_path": metadata_path
+	}
+}
+
+export func auth_token_store(action, payload) {
+	return hosted_auth_token_store(action, payload)
+}
+
+export func verify_package_signature(lock_entry, trust_policy) {
+	return hosted_verify_package_signature(lock_entry, trust_policy)
+}

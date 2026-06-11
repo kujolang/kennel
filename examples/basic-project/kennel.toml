@@ -1,0 +1,44 @@
+[package]
+name = "basic-project"
+version = "0.1.0"
+description = "Minimal Kennel example project"
+license = "MIT"
+authors = ["Example Developer <dev@example.com>"]
+readme = "README.md"
+
+[package.status]
+stage = "experimental"
+stability = "early"
+public_api = false
+notes = "This example is for Stage 1 Kennel verification."
+
+[kujo]
+minimum_version = "0.1.0"
+entry = "main.kujo"
+sources = ["."]
+includes = ["README.md"]
+excludes = [".git", "kennel_packages", "dist", "build", "node_modules"]
+
+[build]
+command = ""
+output = "dist"
+artifacts = []
+
+[dependencies]
+
+[dev-dependencies]
+
+[scripts]
+
+[package.exports]
+
+[package.metadata]
+
+[registry]
+index = ""
+publish = ""
+
+[trust]
+checksum = ""
+signature = ""
+signing_key = ""

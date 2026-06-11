@@ -1,0 +1,3 @@
+from src.path_helpers import parent_dir_path
+
+export parent_dir_path := parent_dir_path

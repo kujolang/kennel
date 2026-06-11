@@ -1,0 +1,3 @@
+from src.hosted_trust import hosted_verify_package_signature
+
+export hosted_verify_package_signature := hosted_verify_package_signature

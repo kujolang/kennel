@@ -1,0 +1,89 @@
+name: nightly-full-regression
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-full-profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout kennel
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Checkout Kujo runtime
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: kujolang/kujo
+          path: kujo-src
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+
+      - name: Build Kujo binary
+        working-directory: kujo-src
+        run: cargo build --release --bin kujo
+
+      - name: Run nightly full regression profile
+        id: full_profile
+        env:
+          KUJO_BIN: ${{ github.workspace }}/kujo-src/target/release/kujo
+          AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          MCP_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_SOURCE_DIR: ${{ github.workspace }}/examples/basic-project
+        run: |
+          set -euo pipefail
+          mkdir -p .kennel_tmp/nightly
+          start_epoch="$(date +%s)"
+          set +e
+          bash ./scripts/verify-profiles.sh full 2>&1 | tee .kennel_tmp/nightly/nightly-full-profile.log
+          profile_exit="${PIPESTATUS[0]}"
+          set -e
+          end_epoch="$(date +%s)"
+          duration_seconds="$((end_epoch - start_epoch))"
+          echo "profile_exit=${profile_exit}" >> "$GITHUB_OUTPUT"
+          echo "duration_seconds=${duration_seconds}" >> "$GITHUB_OUTPUT"
+          if [ "$profile_exit" -ne 0 ]; then
+            exit "$profile_exit"
+          fi
+
+      - name: Generate CI quality report
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUN_DURATION_SECONDS: ${{ steps.full_profile.outputs.duration_seconds }}
+          PROFILE_EXIT: ${{ steps.full_profile.outputs.profile_exit }}
+        run: |
+          set -euo pipefail
+          run_conclusion="failure"
+          if [ "${PROFILE_EXIT:-1}" = "0" ]; then
+            run_conclusion="success"
+          fi
+          RUN_CONCLUSION="$run_conclusion" bash ./scripts/generate-ci-quality-report.sh
+
+      - name: Upload nightly CI quality report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nightly-ci-quality-report
+          path: .kennel_tmp/nightly/ci-quality-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload nightly artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nightly-full-regression-artifacts
+          path: |
+            .kennel_tmp/**
+          if-no-files-found: warn
+          retention-days: 14

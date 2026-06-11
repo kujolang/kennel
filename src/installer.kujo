@@ -1,0 +1,222 @@
+from path_helpers import parent_dir_path
+from src.utils import command_ok, dict_get_or, ensure_dir, path_basename, run_shell, shell_quote
+
+func is_safe_install_path(path) {
+	text := trim(to_string(path))
+	if text == "" {
+		return false
+	}
+	if starts_with(text, "/") == false {
+		return false
+	}
+	if index_of(text, "..") >= 0 {
+		return false
+	}
+	if index_of(text, "/kennel_packages/") < 0 {
+		return false
+	}
+	if ends_with(text, "/kennel_packages") {
+		return false
+	}
+	return true
+}
+
+func remove_path(path) {
+	if trim(path) == "" {
+		return true
+	}
+	if path_exists(path) == false {
+		return true
+	}
+	if is_safe_install_path(path) == false {
+		return false
+	}
+	parent_dir := parent_dir_path(path)
+	trash_root := parent_dir + "/.kennel_installer_trash"
+	ensure_dir(trash_root)
+	trash_path := trash_root + "/" + path_basename(path) + "-" + to_string(now())
+	result := run_shell("mv " + shell_quote(path) + " " + shell_quote(trash_path))
+	return command_ok(result)
+}
+
+func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
+	remove_path(install_path)
+	clone_cmd := "git clone " + shell_quote(url) + " " + shell_quote(install_path)
+	if resolved_ref != "" && resolved_ref != "HEAD" && resolved_commit == "" {
+		clone_cmd := "git clone --depth 1 --branch " + shell_quote(resolved_ref) + " " + shell_quote(url) + " " + shell_quote(install_path)
+	}
+	clone_result := run_shell(clone_cmd)
+	if command_ok(clone_result) == false {
+		return {
+			"ok": false,
+			"error": "Failed to clone " + url + ": " + trim(clone_result.stderr)
+		}
+	}
+	if resolved_commit != "" {
+		checkout_cmd := "git -C " + shell_quote(install_path) + " checkout " + shell_quote(resolved_commit)
+		checkout_result := run_shell(checkout_cmd)
+		if command_ok(checkout_result) == false {
+			return {
+				"ok": false,
+				"error": "Failed to checkout commit " + resolved_commit + ": " + trim(checkout_result.stderr)
+			}
+		}
+	}
+	rev_parse := run_shell("git -C " + shell_quote(install_path) + " rev-parse HEAD")
+	if command_ok(rev_parse) == false {
+		return {
+			"ok": false,
+			"error": "Failed to read resolved commit for " + url
+		}
+	}
+	return {
+		"ok": true,
+		"commit": trim(rev_parse.stdout)
+	}
+}
+
+func copy_local_package(path, install_path) {
+	if remove_path(install_path) == false {
+		return {
+			"ok": false,
+			"error": "Failed to clear existing install directory: " + install_path
+		}
+	}
+	parent_dir := parent_dir_path(install_path)
+	ensure_dir(parent_dir)
+	git_clone := run_shell("git clone " + shell_quote(path) + " " + shell_quote(install_path))
+	if command_ok(git_clone) == false {
+		tar_cmd := "mkdir -p " + shell_quote(install_path) + " && tar -C " + shell_quote(path) + " -cf - . | tar -C " + shell_quote(install_path) + " -xf -"
+		result := run_shell(tar_cmd)
+		if command_ok(result) == false {
+			return {
+				"ok": false,
+				"error": "Failed to copy local package from " + path + ": " + trim(result.stderr)
+			}
+		}
+	}
+	return {
+		"ok": true,
+		"commit": ""
+	}
+}
+
+func cleanup_install_path(install_path) {
+	patterns := [".git", "node_modules", "dist", "build", "kennel_packages", ".kennel_tmp"]
+	for pattern in patterns {
+		remove_path(install_path + "/" + pattern)
+	}
+}
+
+func normalize_dependency_table(manifest_obj) {
+	if type(manifest_obj) != "dict" {
+		return {}
+	}
+	if has_key(manifest_obj, "dependencies") == 0 {
+		return {}
+	}
+	deps := manifest_obj["dependencies"]
+	if type(deps) != "dict" {
+		return {}
+	}
+	return deps
+}
+
+func read_package_metadata(install_path, fallback_name) {
+	kennel_manifest_path := install_path + "/kennel.toml"
+	kujo_manifest_path := install_path + "/kujo.toml"
+	name := fallback_name
+	version := "0.1.0"
+	dependencies := {}
+	if file_exists(kennel_manifest_path) {
+		try {
+			manifest := parse_toml(read_file(kennel_manifest_path))
+			dependencies = normalize_dependency_table(manifest)
+			if has_key(manifest, "package") {
+				if has_key(manifest["package"], "name") {
+					name := to_string(manifest["package"]["name"])
+				}
+				if has_key(manifest["package"], "version") {
+					version := to_string(manifest["package"]["version"])
+				}
+			}
+		} except err {
+			# Keep fallback metadata.
+		}
+	} else if file_exists(kujo_manifest_path) {
+		try {
+			manifest := parse_toml(read_file(kujo_manifest_path))
+			dependencies = normalize_dependency_table(manifest)
+			if has_key(manifest, "package") {
+				if has_key(manifest["package"], "name") {
+					name := to_string(manifest["package"]["name"])
+				}
+				if has_key(manifest["package"], "version") {
+					version := to_string(manifest["package"]["version"])
+				}
+			}
+		} except err {
+			# Keep fallback metadata.
+		}
+	}
+	return {
+		"name": name,
+		"version": version,
+		"dependencies": dependencies
+	}
+}
+
+func install_resolved(cwd, resolved) {
+	packages_root := cwd + "/kennel_packages"
+	ensure_dir(packages_root)
+	install_name := resolved["name"]
+	install_path := packages_root + "/" + install_name
+	kind := resolved["kind"]
+	install_result := {
+		"ok": false,
+		"error": "",
+		"commit": ""
+	}
+	if kind == "path" {
+		install_result := copy_local_package(resolved["path"], install_path)
+	} else {
+		install_result := clone_git_package(resolved["url"], resolved["resolved_ref"], resolved["resolved_commit"], install_path)
+	}
+	if install_result["ok"] == false {
+		return install_result
+	}
+	cleanup_install_path(install_path)
+	metadata := read_package_metadata(install_path, install_name)
+	resolved_copy := resolved
+	if resolved_copy["resolved_commit"] == "" {
+		resolved_copy["resolved_commit"] := install_result["commit"]
+	}
+	return {
+		"ok": true,
+		"resolved": resolved_copy,
+		"install_path": "kennel_packages/" + install_name,
+		"version": metadata["version"],
+		"package_name": metadata["name"],
+		"dependencies": dict_get_or(metadata, "dependencies", {}),
+		"repository": dict_get_or(resolved_copy, "url", "")
+	}
+}
+
+func install_locked_package(cwd, lock_entry) {
+	resolved := {
+		"name": lock_entry["name"],
+		"kind": lock_entry["kind"],
+		"source": lock_entry["source"],
+		"requested": lock_entry["requested"],
+		"requested_kind": lock_entry["requested_kind"],
+		"resolved_ref": lock_entry["resolved_ref"],
+		"resolved_commit": lock_entry["resolved_commit"],
+		"url": lock_entry["repository"],
+		"path": lock_entry["path"]
+	}
+	return install_resolved(cwd, resolved)
+}
+
+export install_resolved := install_resolved
+export install_locked_package := install_locked_package
+export remove_install_path := remove_path

@@ -1,0 +1,111 @@
+from cli import flag_value, parse_cli, print_help
+from commands_dependency import command_add, command_info, command_init, command_new, command_install, command_list, command_remove, command_search, command_update, command_validate
+from commands_hosted import command_access, command_api_metadata, command_api_search, command_install_hosted, command_login, command_publish, command_visibility, command_yank
+
+func resolve_project_dir(parsed, fallback_cwd) {
+	raw := trim(to_string(flag_value(parsed, "--project-dir", "")))
+	if raw == "" {
+		return fallback_cwd
+	}
+	return path_absolute(raw)
+}
+
+func dispatch_command(command, project_dir, parsed) {
+	if command == "help" || command == "--help" || command == "-h" {
+		print_help()
+		return
+	}
+	if command == "init" {
+		command_init(project_dir, parsed)
+		return
+	}
+	if command == "new" {
+		command_new(project_dir, parsed)
+		return
+	}
+	if command == "add" {
+		command_add(project_dir, parsed)
+		return
+	}
+	if command == "install" {
+		command_install(project_dir, parsed)
+		return
+	}
+	if command == "update" {
+		command_update(project_dir, parsed)
+		return
+	}
+	if command == "remove" {
+		command_remove(project_dir, parsed)
+		return
+	}
+	if command == "list" {
+		command_list(project_dir)
+		return
+	}
+	if command == "info" {
+		command_info(project_dir, parsed)
+		return
+	}
+	if command == "search" {
+		command_search(project_dir, parsed)
+		return
+	}
+	if command == "login" {
+		command_login(project_dir, parsed)
+		return
+	}
+	if command == "publish" {
+		command_publish(project_dir, parsed)
+		return
+	}
+	if command == "yank" {
+		command_yank(project_dir, parsed)
+		return
+	}
+	if command == "access" {
+		command_access(project_dir, parsed)
+		return
+	}
+	if command == "visibility" {
+		command_visibility(project_dir, parsed)
+		return
+	}
+	if command == "api-search" {
+		command_api_search(project_dir, parsed)
+		return
+	}
+	if command == "api-metadata" {
+		command_api_metadata(project_dir, parsed)
+		return
+	}
+	if command == "install-hosted" {
+		command_install_hosted(project_dir, parsed)
+		return
+	}
+	if command == "validate" {
+		command_validate(project_dir)
+		return
+	}
+	print("Unknown command: " + command + ". Run `kennel help` for supported commands.")
+	print_help()
+	exit(1)
+}
+
+func main() {
+	current_cwd := os_getcwd()
+	parsed := parse_cli(args())
+	command := parsed["command"]
+	project_dir := resolve_project_dir(parsed, current_cwd)
+	if path_exists(project_dir) == false {
+		print("Project directory does not exist: " + project_dir)
+		exit(1)
+	}
+	if path_is_dir(project_dir) == false {
+		print("Project directory must be a directory: " + project_dir)
+		exit(1)
+	}
+	dispatch_command(command, project_dir, parsed)
+}
+
+main()

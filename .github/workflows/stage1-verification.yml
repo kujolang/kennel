@@ -1,0 +1,180 @@
+name: stage1-verification
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - checklist/**
+
+jobs:
+  build-kujo-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout Kujo runtime
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: kujolang/kujo
+          path: kujo-src
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+
+      - name: Build Kujo binary
+        working-directory: kujo-src
+        run: cargo build --release --bin kujo
+
+      - name: Upload Kujo binary artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kujo-runtime-linux
+          path: kujo-src/target/release/kujo
+          if-no-files-found: error
+          retention-days: 1
+
+  static-script-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout kennel
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install shellcheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run static shell quality checks
+        env:
+          VERIFY_SHELLCHECK_REQUIRED: '1'
+          SHELLCHECK_SEVERITY: warning
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-shell-quality.sh
+
+  macos-smoke:
+    runs-on: macos-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout kennel
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Checkout Kujo runtime
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: kujolang/kujo
+          path: kujo-src
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+
+      - name: Build Kujo binary
+        working-directory: kujo-src
+        run: cargo build --release --bin kujo
+
+      - name: Run macOS smoke checks
+        env:
+          KUJO_BIN: ${{ github.workspace }}/kujo-src/target/release/kujo
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-macos-smoke.sh
+
+  stage1-verification:
+    needs: build-kujo-runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout kennel
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Download Kujo binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kujo-runtime-linux
+          path: kujo-bin
+
+      - name: Run Stage 1 contract tests
+        env:
+          KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-contract-suites.sh
+
+      - name: Verify Stage 1 CI gate contract
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-stage-1-ci-workflow.sh
+
+      - name: Verify change-type validation policy contract
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-change-type-policy.sh
+
+      - name: Verify benchmark harness dry-run contract
+        env:
+          BENCH_DRY_RUN: '1'
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-benchmark-harness.sh
+
+      - name: Run Stage 1 verification workflow
+        env:
+          KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
+          AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          MCP_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_SOURCE_DIR: ${{ github.workspace }}/examples/basic-project
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-stage-1.sh
+          bash ./scripts/verify-stage-1-source-matrix.sh
+          bash ./scripts/verify-cli-messages.sh
+          bash ./scripts/verify-git-diagnostics.sh
+          bash ./scripts/verify-pinned-refs.sh
+          bash ./scripts/verify-stale-lockfile.sh
+          bash ./scripts/verify-deterministic-lockfile.sh
+          bash ./scripts/verify-kujo-native-direction.sh
+
+  stage-critical-gates:
+    needs: build-kujo-runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - stage2
+          - stage3
+          - security
+
+    steps:
+      - name: Checkout kennel
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Download Kujo binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kujo-runtime-linux
+          path: kujo-bin
+
+      - name: Run stage profile critical gates
+        env:
+          KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
+          AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          MCP_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_SOURCE_DIR: ${{ github.workspace }}/examples/basic-project
+        run: |
+          set -euo pipefail
+          bash ./scripts/verify-profiles.sh "${{ matrix.profile }}"

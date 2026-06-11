@@ -1,0 +1,420 @@
+from src.utils import command_ok, dict_get_or, run_shell, shell_quote
+
+func strip_leading_v(value) {
+	text := trim(to_string(value))
+	if starts_with(text, "v") || starts_with(text, "V") {
+		return substring(text, 1, len(text))
+	}
+	return text
+}
+
+func is_digits(value) {
+	text := trim(to_string(value))
+	if text == "" {
+		return false
+	}
+	idx := 0
+	while idx < len(text) {
+		ch := substring(text, idx, idx + 1)
+		if ch < "0" || ch > "9" {
+			return false
+		}
+		idx = idx + 1
+	}
+	return true
+}
+
+func normalize_numeric_string(value) {
+	text := trim(to_string(value))
+	if text == "" {
+		return "0"
+	}
+	idx := 0
+	while idx < len(text) - 1 && substring(text, idx, idx + 1) == "0" {
+		idx = idx + 1
+	}
+	return substring(text, idx, len(text))
+}
+
+func parse_semver_value(value) {
+	text := strip_leading_v(value)
+	parts := split(text, ".")
+	if len(parts) != 3 {
+		return {
+			"ok": false
+		}
+	}
+	major := normalize_numeric_string(parts[0])
+	minor := normalize_numeric_string(parts[1])
+	patch := normalize_numeric_string(parts[2])
+	if is_digits(major) == false || is_digits(minor) == false || is_digits(patch) == false {
+		return {
+			"ok": false
+		}
+	}
+	return {
+		"ok": true,
+		"major": major,
+		"minor": minor,
+		"patch": patch,
+		"normalized": major + "." + minor + "." + patch
+	}
+}
+
+func compare_numeric_segments(left_value, right_value) {
+	left := normalize_numeric_string(left_value)
+	right := normalize_numeric_string(right_value)
+	if len(left) > len(right) {
+		return 1
+	}
+	if len(left) < len(right) {
+		return -1
+	}
+	if left > right {
+		return 1
+	}
+	if left < right {
+		return -1
+	}
+	return 0
+}
+
+func compare_semver(left_version, right_version) {
+	major_compare := compare_numeric_segments(left_version["major"], right_version["major"])
+	if major_compare != 0 {
+		return major_compare
+	}
+	minor_compare := compare_numeric_segments(left_version["minor"], right_version["minor"])
+	if minor_compare != 0 {
+		return minor_compare
+	}
+	return compare_numeric_segments(left_version["patch"], right_version["patch"])
+}
+
+func semver_range_tokens(range_expr) {
+	raw := replace(trim(to_string(range_expr)), ",", " ")
+	if raw == "" {
+		return []
+	}
+	parts := split(raw, " ")
+	tokens := []
+	for part in parts {
+		token := trim(to_string(part))
+		if token != "" {
+			tokens := push(tokens, token)
+		}
+	}
+	return tokens
+}
+
+func semver_satisfies_token(version_obj, token_value) {
+	token := trim(to_string(token_value))
+	if token == "" || token == "*" {
+		return true
+	}
+	operator := "="
+	operand := token
+	if starts_with(token, ">=") || starts_with(token, "<=") {
+		operator = substring(token, 0, 2)
+		operand = substring(token, 2, len(token))
+	} else if starts_with(token, ">") || starts_with(token, "<") || starts_with(token, "=") || starts_with(token, "^") || starts_with(token, "~") {
+		operator = substring(token, 0, 1)
+		operand = substring(token, 1, len(token))
+	}
+	base_version := parse_semver_value(operand)
+	if base_version["ok"] == false {
+		return false
+	}
+	cmp := compare_semver(version_obj, base_version)
+	if operator == ">=" {
+		return cmp >= 0
+	}
+	if operator == ">" {
+		return cmp > 0
+	}
+	if operator == "<=" {
+		return cmp <= 0
+	}
+	if operator == "<" {
+		return cmp < 0
+	}
+	if operator == "~" {
+		if compare_numeric_segments(version_obj["major"], base_version["major"]) != 0 {
+			return false
+		}
+		if compare_numeric_segments(version_obj["minor"], base_version["minor"]) != 0 {
+			return false
+		}
+		return cmp >= 0
+	}
+	if operator == "^" {
+		if compare_numeric_segments(base_version["major"], "0") == 0 {
+			if compare_numeric_segments(base_version["minor"], "0") == 0 {
+				if compare_numeric_segments(version_obj["major"], "0") != 0 {
+					return false
+				}
+				if compare_numeric_segments(version_obj["minor"], "0") != 0 {
+					return false
+				}
+				return cmp >= 0
+			}
+			if compare_numeric_segments(version_obj["major"], "0") != 0 {
+				return false
+			}
+			if compare_numeric_segments(version_obj["minor"], base_version["minor"]) != 0 {
+				return false
+			}
+			return cmp >= 0
+		}
+		if compare_numeric_segments(version_obj["major"], base_version["major"]) != 0 {
+			return false
+		}
+		return cmp >= 0
+	}
+	return cmp == 0
+}
+
+func semver_satisfies_range(version_obj, range_expr) {
+	tokens := semver_range_tokens(range_expr)
+	if len(tokens) == 0 {
+		return false
+	}
+	for token in tokens {
+		if semver_satisfies_token(version_obj, token) == false {
+			return false
+		}
+	}
+	return true
+}
+
+func git_ls_remote_tags(url) {
+	cmd := "git ls-remote --tags --refs " + shell_quote(url)
+	result := run_shell(cmd)
+	if command_ok(result) == false {
+		return {
+			"ok": false,
+			"error": "Failed to list tags from " + url + ": " + trim(to_string(result.stderr))
+		}
+	}
+	lines := split(trim(to_string(result.stdout)), "\n")
+	tags := []
+	for line in lines {
+		trimmed_line := trim(to_string(line))
+		if trimmed_line == "" {
+			continue
+		}
+		parts := split(trimmed_line, "\t")
+		if len(parts) < 2 {
+			continue
+		}
+		commit := trim(to_string(parts[0]))
+		ref_name := trim(to_string(parts[1]))
+		if starts_with(ref_name, "refs/tags/") {
+			tags := push(tags, {
+				"tag": substring(ref_name, len("refs/tags/"), len(ref_name)),
+				"commit": commit
+			})
+		}
+	}
+	if len(tags) == 0 {
+		return {
+			"ok": false,
+			"error": "No tags were found in " + url + " for semver range resolution."
+		}
+	}
+	return {
+		"ok": true,
+		"tags": tags
+	}
+}
+
+func resolve_semver_range(url, range_expr) {
+	tags_result := git_ls_remote_tags(url)
+	if tags_result["ok"] == false {
+		return tags_result
+	}
+	best_found := false
+	best_version := {}
+	best_tag := ""
+	best_commit := ""
+	for tag_entry in tags_result["tags"] {
+		tag_name := to_string(dict_get_or(tag_entry, "tag", ""))
+		parsed_version := parse_semver_value(tag_name)
+		if parsed_version["ok"] && semver_satisfies_range(parsed_version, range_expr) {
+			if best_found == false || compare_semver(parsed_version, best_version) > 0 {
+				best_found = true
+				best_version = parsed_version
+				best_tag = tag_name
+				best_commit = to_string(dict_get_or(tag_entry, "commit", ""))
+			}
+		}
+	}
+	if best_found == false {
+		return {
+			"ok": false,
+			"error": "No tag in " + url + " satisfied semver range `" + range_expr + "`."
+		}
+	}
+	return {
+		"ok": true,
+		"tag": best_tag,
+		"commit": best_commit,
+		"version": to_string(dict_get_or(best_version, "normalized", ""))
+	}
+}
+
+func format_git_ls_remote_error(url, selector, stderr_text) {
+	stderr_value := trim(stderr_text)
+	if stderr_value == "" {
+		return "Failed to resolve ref `" + selector + "` from " + url + ". Git returned no stderr output. Verify network access and repository visibility."
+	}
+	if index_of(stderr_value, "Repository not found") >= 0 || index_of(stderr_value, "repository not found") >= 0 {
+		return "Failed to resolve ref `" + selector + "` from " + url + ". Repository not found. Verify owner/repo and repository visibility (public/private access)."
+	}
+	return "Failed to resolve ref `" + selector + "` from " + url + ". " + stderr_value + " Verify that the repository is reachable and that the requested ref exists."
+}
+
+func git_ls_remote(url, ref_name) {
+	selector := trim(ref_name)
+	if selector == "" {
+		selector := "HEAD"
+	}
+	cmd := "git ls-remote " + shell_quote(url) + " " + shell_quote(selector)
+	result := run_shell(cmd)
+	if command_ok(result) == false {
+		return {
+			"ok": false,
+			"error": format_git_ls_remote_error(url, selector, result.stderr)
+		}
+	}
+	lines := split(trim(result.stdout), "\n")
+	if len(lines) == 0 || trim(lines[0]) == "" {
+		return {
+			"ok": false,
+			"error": "No commit found for ref `" + selector + "` in " + url + ". Verify that the ref exists and is pushed to the remote repository."
+		}
+	}
+	first := trim(lines[0])
+	parts := split(first, "\t")
+	if len(parts) < 1 {
+		return {
+			"ok": false,
+			"error": "Could not parse git ls-remote output for " + url
+		}
+	}
+	commit := trim(parts[0])
+	if commit == "" {
+		return {
+			"ok": false,
+			"error": "Resolved commit was empty for " + url
+		}
+	}
+	return {
+		"ok": true,
+		"commit": commit,
+		"ref": selector
+	}
+}
+
+func resolve_dependency_with_policy(dep_name, parsed_spec, resolution_policy) {
+	spec := parsed_spec
+	kind := dict_get_or(spec, "kind", "")
+	requested := trim(to_string(dict_get_or(spec, "requested", "")))
+	requested_kind := to_string(dict_get_or(spec, "requested_kind", "none"))
+	allow_semver_ranges := false
+	if type(resolution_policy) == "dict" {
+		allow_semver_ranges = dict_get_or(resolution_policy, "semver_ranges", false) == true
+	}
+
+	resolved := {
+		"name": dep_name,
+		"kind": kind,
+		"source": dict_get_or(spec, "source", ""),
+		"requested": requested,
+		"requested_kind": requested_kind,
+		"resolved_ref": "",
+		"resolved_commit": "",
+		"url": dict_get_or(spec, "url", ""),
+		"path": dict_get_or(spec, "path", ""),
+		"checksum": trim(to_string(dict_get_or(spec, "checksum", ""))),
+		"signature": trim(to_string(dict_get_or(spec, "signature", ""))),
+		"signing_key": trim(to_string(dict_get_or(spec, "signing_key", "")))
+	}
+
+	if kind == "path" {
+		resolved["resolved_ref"] := "local"
+		resolved["resolved_commit"] := ""
+		return {
+			"ok": true,
+			"resolved": resolved
+		}
+	}
+
+	if requested_kind == "commit" {
+		resolved["resolved_ref"] := requested
+		resolved["resolved_commit"] := requested
+		return {
+			"ok": true,
+			"resolved": resolved
+		}
+	}
+
+	if allow_semver_ranges && requested_kind == "range" {
+		range_result := resolve_semver_range(resolved["url"], requested)
+		if range_result["ok"] == false {
+			return range_result
+		}
+		resolved["resolved_ref"] := to_string(dict_get_or(range_result, "tag", ""))
+		resolved["resolved_commit"] := ""
+		resolved["resolved_version"] := to_string(dict_get_or(range_result, "version", ""))
+		return {
+			"ok": true,
+			"resolved": resolved
+		}
+	}
+
+	selector := requested
+	if selector == "" {
+		selector := "HEAD"
+	}
+	git_result := git_ls_remote(resolved["url"], selector)
+	if git_result["ok"] == false {
+		return git_result
+	}
+	resolved["resolved_ref"] := selector
+	resolved["resolved_commit"] := git_result["commit"]
+	return {
+		"ok": true,
+		"resolved": resolved
+	}
+}
+
+func resolve_dependency(dep_name, parsed_spec) {
+	return resolve_dependency_with_policy(dep_name, parsed_spec, {})
+}
+
+func lock_entry_from_install(install_result) {
+	resolved := install_result["resolved"]
+	entry := {
+		"name": resolved["name"],
+		"version": dict_get_or(install_result, "version", "0.0.0"),
+		"source": resolved["source"],
+		"requested": resolved["requested"],
+		"requested_kind": resolved["requested_kind"],
+		"resolved_ref": resolved["resolved_ref"],
+		"resolved_commit": resolved["resolved_commit"],
+		"install_path": dict_get_or(install_result, "install_path", ""),
+		"checksum": trim(to_string(dict_get_or(install_result, "checksum", dict_get_or(resolved, "checksum", "")))),
+		"signature": trim(to_string(dict_get_or(install_result, "signature", dict_get_or(resolved, "signature", "")))),
+		"signing_key": trim(to_string(dict_get_or(install_result, "signing_key", dict_get_or(resolved, "signing_key", "")))),
+		"repository": dict_get_or(install_result, "repository", dict_get_or(resolved, "url", "")),
+		"kind": resolved["kind"],
+		"path": dict_get_or(resolved, "path", "")
+	}
+	return entry
+}
+
+export resolve_dependency := resolve_dependency
+export resolve_dependency_with_policy := resolve_dependency_with_policy
+export lock_entry_from_install := lock_entry_from_install
+export format_git_ls_remote_error := format_git_ls_remote_error

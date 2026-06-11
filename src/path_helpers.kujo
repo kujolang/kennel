@@ -1,0 +1,28 @@
+export func parent_dir_path(path_value) {
+	parts := split(path_value, "/")
+	if len(parts) <= 1 {
+		return "."
+	}
+	is_absolute := starts_with(path_value, "/")
+	result := ""
+	if is_absolute {
+		result := "/"
+	}
+	i := 0
+	limit := len(parts) - 1
+	while i < limit {
+		part := parts[i]
+		i := i + 1
+		if part == "" {
+			continue
+		}
+		if result != "" && ends_with(result, "/") == false {
+			result := result + "/"
+		}
+		result := result + part
+	}
+	if result == "" {
+		return "."
+	}
+	return result
+}

@@ -1,0 +1,213 @@
+from src.utils import dict_get_or, is_base64_text, is_safe_signing_key, parse_checksum
+
+export func hosted_verify_package_signature(lock_entry, trust_policy) {
+	if type(lock_entry) != "dict" {
+		return {
+			"ok": false,
+			"error_kind": "malformed_input",
+			"error": "Signature verification requires a lock entry dictionary.",
+			"entry": lock_entry,
+			"trust_policy": trust_policy
+		}
+	}
+	policy := trust_policy
+	if type(policy) != "dict" {
+		policy := {}
+	}
+	entry_name := trim(to_string(dict_get_or(lock_entry, "name", "")))
+	if entry_name == "" {
+		entry_name = "<unknown-package>"
+	}
+	expected_checksum := trim(to_string(dict_get_or(policy, "checksum", "")))
+	expected_signature := trim(to_string(dict_get_or(policy, "signature", "")))
+	expected_signing_key := trim(to_string(dict_get_or(policy, "signing_key", "")))
+	actual_checksum := trim(to_string(dict_get_or(lock_entry, "checksum", "")))
+	actual_signature := trim(to_string(dict_get_or(lock_entry, "signature", "")))
+	actual_signing_key := trim(to_string(dict_get_or(lock_entry, "signing_key", "")))
+	require_values := expected_checksum != "" || expected_signature != "" || expected_signing_key != ""
+	if require_values == false {
+		return {
+			"ok": true,
+			"package": entry_name,
+			"validated": [],
+			"mode": "none"
+		}
+	}
+	if expected_signature != "" && expected_signing_key == "" {
+		return {
+			"ok": false,
+			"error_kind": "malformed_trust_policy",
+			"field": "signing_key",
+			"error": "Trust policy is malformed: signature requires signing_key.",
+			"package": entry_name
+		}
+	}
+	if expected_signing_key != "" && expected_signature == "" {
+		return {
+			"ok": false,
+			"error_kind": "malformed_trust_policy",
+			"field": "signature",
+			"error": "Trust policy is malformed: signing_key requires signature.",
+			"package": entry_name
+		}
+	}
+	validated := []
+	normalized_expected_checksum := ""
+	if expected_checksum != "" {
+		expected_checksum_check := parse_checksum(expected_checksum)
+		if expected_checksum_check["ok"] == false {
+			return {
+				"ok": false,
+				"error_kind": "malformed_trust_policy",
+				"field": "checksum",
+				"error": "Trust policy checksum is malformed: " + to_string(expected_checksum_check["error"]),
+				"package": entry_name,
+				"expected_checksum": expected_checksum
+			}
+		}
+		normalized_expected_checksum = expected_checksum_check["normalized"]
+	}
+	if expected_signature != "" && is_base64_text(expected_signature) == false {
+		return {
+			"ok": false,
+			"error_kind": "malformed_trust_policy",
+			"field": "signature",
+			"error": "Trust policy signature must be base64-encoded.",
+			"package": entry_name
+		}
+	}
+	if expected_signing_key != "" && is_safe_signing_key(expected_signing_key) == false {
+		return {
+			"ok": false,
+			"error_kind": "malformed_trust_policy",
+			"field": "signing_key",
+			"error": "Trust policy signing key contains unsupported characters.",
+			"package": entry_name
+		}
+	}
+	if actual_signature != "" && actual_signing_key == "" && (expected_signature != "" || expected_signing_key != "") {
+		return {
+			"ok": false,
+			"error_kind": "missing_package_metadata",
+			"field": "signing_key",
+			"error": "Package `" + entry_name + "` includes signature metadata but is missing signing key metadata.",
+			"package": entry_name
+		}
+	}
+	if actual_signing_key != "" && actual_signature == "" && (expected_signature != "" || expected_signing_key != "") {
+		return {
+			"ok": false,
+			"error_kind": "missing_package_metadata",
+			"field": "signature",
+			"error": "Package `" + entry_name + "` includes signing key metadata but is missing signature metadata.",
+			"package": entry_name
+		}
+	}
+	if expected_checksum != "" {
+		if actual_checksum == "" {
+			return {
+				"ok": false,
+				"error_kind": "missing_package_metadata",
+				"field": "checksum",
+				"error": "Package `" + entry_name + "` is missing checksum metadata required by trust policy.",
+				"package": entry_name,
+				"expected_checksum": normalized_expected_checksum
+			}
+		}
+		actual_checksum_check := parse_checksum(actual_checksum)
+		if actual_checksum_check["ok"] == false {
+			return {
+				"ok": false,
+				"error_kind": "malformed_package_metadata",
+				"field": "checksum",
+				"error": "Package `" + entry_name + "` has malformed checksum metadata.",
+				"package": entry_name,
+				"actual_checksum": actual_checksum
+			}
+		}
+		if actual_checksum_check["normalized"] != normalized_expected_checksum {
+			return {
+				"ok": false,
+				"error_kind": "trust_policy_mismatch",
+				"field": "checksum",
+				"error": "Package `" + entry_name + "` checksum does not match trust policy.",
+				"package": entry_name,
+				"expected_checksum": normalized_expected_checksum,
+				"actual_checksum": actual_checksum_check["normalized"]
+			}
+		}
+		validated := push(validated, "checksum")
+	}
+	if expected_signature != "" {
+		if actual_signature == "" {
+			return {
+				"ok": false,
+				"error_kind": "missing_package_metadata",
+				"field": "signature",
+				"error": "Package `" + entry_name + "` is missing signature metadata required by trust policy.",
+				"package": entry_name,
+				"expected_signature": expected_signature
+			}
+		}
+		if is_base64_text(actual_signature) == false {
+			return {
+				"ok": false,
+				"error_kind": "malformed_package_metadata",
+				"field": "signature",
+				"error": "Package `" + entry_name + "` has malformed signature metadata.",
+				"package": entry_name
+			}
+		}
+		if actual_signature != expected_signature {
+			return {
+				"ok": false,
+				"error_kind": "trust_policy_mismatch",
+				"field": "signature",
+				"error": "Package `" + entry_name + "` signature does not match trust policy.",
+				"package": entry_name,
+				"expected_signature": expected_signature,
+				"actual_signature": actual_signature
+			}
+		}
+		validated := push(validated, "signature")
+	}
+	if expected_signing_key != "" {
+		if actual_signing_key == "" {
+			return {
+				"ok": false,
+				"error_kind": "missing_package_metadata",
+				"field": "signing_key",
+				"error": "Package `" + entry_name + "` is missing signing key metadata required by trust policy.",
+				"package": entry_name,
+				"expected_signing_key": expected_signing_key
+			}
+		}
+		if is_safe_signing_key(actual_signing_key) == false {
+			return {
+				"ok": false,
+				"error_kind": "malformed_package_metadata",
+				"field": "signing_key",
+				"error": "Package `" + entry_name + "` has malformed signing key metadata.",
+				"package": entry_name
+			}
+		}
+		if actual_signing_key != expected_signing_key {
+			return {
+				"ok": false,
+				"error_kind": "trust_policy_mismatch",
+				"field": "signing_key",
+				"error": "Package `" + entry_name + "` signing key does not match trust policy.",
+				"package": entry_name,
+				"expected_signing_key": expected_signing_key,
+				"actual_signing_key": actual_signing_key
+			}
+		}
+		validated := push(validated, "signing_key")
+	}
+	return {
+		"ok": true,
+		"package": entry_name,
+		"validated": validated,
+		"mode": "strict"
+	}
+}

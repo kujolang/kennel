@@ -1,0 +1,355 @@
+from cli import flag_value, has_flag, positional
+from commands_shared import capture_project_state, ensure_project_manifest, persist_project_state, read_login_token_from_file, rebuild_lockfile_from_manifest, require_identifier, resolve_and_install_dependency, resolve_registry_request_context, resolution_policy_from_manifest, select_hosted_version_entry, source_policy_from_manifest, source_policy_with_cli_overrides, trust_policy_from_manifest
+from dependency_spec import dependency_entry_from_source, parse_source_reference
+from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, set_package_visibility, yank_package_version
+from manifest import set_dependency
+from src.utils import dict_get_or
+
+func command_login(cwd, parsed_cli) {
+	registry_name := trim(to_string(flag_value(parsed_cli, "--registry", "default")))
+	if registry_name == "" {
+		registry_name := "default"
+	}
+	registry_name = require_identifier(registry_name, "Registry name")
+	user_name := trim(to_string(flag_value(parsed_cli, "--user", "default")))
+	if user_name == "" {
+		user_name = "default"
+	}
+	user_name = require_identifier(user_name, "User name")
+	token_value := trim(to_string(flag_value(parsed_cli, "--token", "")))
+	token_file := trim(to_string(flag_value(parsed_cli, "--token-file", "")))
+	raw_store_path := trim(to_string(flag_value(parsed_cli, "--store-path", "")))
+	if token_value == "" {
+		if token_file == "" {
+			print("Usage: kennel login (--token TOKEN | --token-file PATH) [--registry NAME] [--user NAME] [--store-path PATH]")
+			exit(1)
+		}
+		loaded_token := read_login_token_from_file(cwd, token_file)
+		if loaded_token["ok"] == false {
+			print(loaded_token["error"])
+			exit(1)
+		}
+		token_value := loaded_token["token"]
+	}
+	payload := {
+		"registry": registry_name,
+		"user": user_name,
+		"token": token_value
+	}
+	if raw_store_path != "" {
+		resolved_store_path := raw_store_path
+		if starts_with(raw_store_path, "/") == false {
+			resolved_store_path := path_absolute(cwd + "/" + raw_store_path)
+		}
+		payload["store_path"] := resolved_store_path
+	}
+	stored := auth_token_store("set", payload)
+	if stored["ok"] == false {
+		print(stored["error"])
+		exit(1)
+	}
+	print("Logged in to registry `" + registry_name + "` as `" + user_name + "`.")
+	print("Auth token stored at " + to_string(dict_get_or(stored, "store_path", "")))
+}
+
+func command_publish(cwd, parsed_cli) {
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	package_obj := dict_get_or(manifest_obj, "package", {})
+	package_name := trim(to_string(dict_get_or(package_obj, "name", "")))
+	package_version := trim(to_string(dict_get_or(package_obj, "version", "")))
+	if package_name == "" || package_version == "" {
+		print("Publish requires package name and version in kennel.toml under [package].")
+		exit(1)
+	}
+	package_name = require_identifier(package_name, "Package name")
+	context := resolve_registry_request_context(cwd, parsed_cli, true)
+	if context["ok"] == false {
+		print(context["error"])
+		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before publishing.")
+		exit(1)
+	}
+	requested_visibility := ""
+	if has_flag(parsed_cli, "--private") {
+		requested_visibility = "private"
+	}
+	if has_flag(parsed_cli, "--public") {
+		if requested_visibility != "" {
+			print("Publish visibility flags are mutually exclusive: use either --private or --public.")
+			exit(1)
+		}
+		requested_visibility = "public"
+	}
+	publish_options := {
+		"manifest": manifest_obj,
+		"registry": context["registry"],
+		"user": context["user"],
+		"token": to_string(dict_get_or(context["token_lookup"], "token", "")),
+		"registry_dir": context["registry_dir"]
+	}
+	if requested_visibility != "" {
+		publish_options["visibility"] := requested_visibility
+	}
+	publish_result := publish_package(cwd, publish_options)
+	if publish_result["ok"] == false {
+		print(publish_result["error"])
+		exit(1)
+	}
+	print("Published `" + package_name + "@" + package_version + "` to registry `" + context["registry"] + "`.")
+	print("Updated registry index: " + to_string(dict_get_or(publish_result, "index_path", "")))
+	print("Updated package metadata: " + to_string(dict_get_or(publish_result, "metadata_path", "")))
+	print("Visibility: " + to_string(dict_get_or(publish_result, "visibility", "public")))
+}
+
+func command_yank(cwd, parsed_cli) {
+	target_version := trim(to_string(positional(parsed_cli, 0, "")))
+	if target_version == "" {
+		print("Usage: kennel yank <version> [--package NAME] [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--undo]")
+		exit(1)
+	}
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	package_obj := dict_get_or(manifest_obj, "package", {})
+	package_name := trim(to_string(flag_value(parsed_cli, "--package", dict_get_or(package_obj, "name", ""))))
+	if package_name == "" {
+		print("Yank requires a package name (set [package].name in kennel.toml or pass --package NAME).")
+		exit(1)
+	}
+	package_name = require_identifier(package_name, "Package name")
+	context := resolve_registry_request_context(cwd, parsed_cli, true)
+	if context["ok"] == false {
+		print(context["error"])
+		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before yanking versions.")
+		exit(1)
+	}
+	do_yank := true
+	if has_flag(parsed_cli, "--undo") {
+		do_yank = false
+	}
+	yank_result := yank_package_version(package_name, target_version, {
+		"registry_dir": context["registry_dir"],
+		"user": context["user"],
+		"yank": do_yank
+	})
+	if yank_result["ok"] == false {
+		print(yank_result["error"])
+		exit(1)
+	}
+	action_label := "Yanked"
+	if do_yank == false {
+		action_label := "Unyanked"
+	}
+	print(action_label + " `" + package_name + "@" + target_version + "` in registry `" + context["registry"] + "`.")
+	print("Updated registry index: " + to_string(dict_get_or(yank_result, "index_path", "")))
+	print("Updated package metadata: " + to_string(dict_get_or(yank_result, "metadata_path", "")))
+}
+
+func command_access(cwd, parsed_cli) {
+	action_name := trim(to_string(positional(parsed_cli, 0, "")))
+	package_name := trim(to_string(positional(parsed_cli, 1, "")))
+	target_name := trim(to_string(positional(parsed_cli, 2, "")))
+	if action_name == "" || package_name == "" {
+		print("Usage: kennel access <owner-add|owner-remove|team-add|team-remove|list> <package> [target] [--role ROLE] [--permission NAME] [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH]")
+		exit(1)
+	}
+	action_name = require_identifier(action_name, "Access action")
+	package_name = require_identifier(package_name, "Package name")
+	if target_name != "" {
+		target_name = require_identifier(target_name, "Access target")
+	}
+	context := resolve_registry_request_context(cwd, parsed_cli, true)
+	if context["ok"] == false {
+		print(context["error"])
+		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before managing package access.")
+		exit(1)
+	}
+	access_options := {
+		"registry_dir": context["registry_dir"],
+		"user": context["user"],
+		"target": target_name,
+		"role": trim(to_string(flag_value(parsed_cli, "--role", "owner"))),
+		"permission": trim(to_string(flag_value(parsed_cli, "--permission", "publish")))
+	}
+	access_result := manage_package_access(package_name, action_name, access_options)
+	if access_result["ok"] == false {
+		print(access_result["error"])
+		exit(1)
+	}
+	if action_name == "list" {
+		print(to_json({
+			"package": package_name,
+			"owners": dict_get_or(access_result, "owners", []),
+			"teams": dict_get_or(access_result, "teams", [])
+		}))
+		return
+	}
+	print("Updated access for package `" + package_name + "` using action `" + action_name + "`.")
+	print("Package metadata: " + to_string(dict_get_or(access_result, "metadata_path", "")))
+}
+
+func command_visibility(cwd, parsed_cli) {
+	package_name := trim(to_string(positional(parsed_cli, 0, "")))
+	visibility_name := to_lower(trim(to_string(positional(parsed_cli, 1, ""))))
+	if package_name == "" || visibility_name == "" {
+		print("Usage: kennel visibility <package> <public|private> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH]")
+		exit(1)
+	}
+	package_name = require_identifier(package_name, "Package name")
+	context := resolve_registry_request_context(cwd, parsed_cli, true)
+	if context["ok"] == false {
+		print(context["error"])
+		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before changing package visibility.")
+		exit(1)
+	}
+	visibility_result := set_package_visibility(package_name, visibility_name, {
+		"registry_dir": context["registry_dir"],
+		"user": context["user"]
+	})
+	if visibility_result["ok"] == false {
+		print(visibility_result["error"])
+		exit(1)
+	}
+	print("Set visibility for package `" + package_name + "` to `" + visibility_name + "`.")
+	print("Updated registry index: " + to_string(dict_get_or(visibility_result, "index_path", "")))
+	print("Updated package metadata: " + to_string(dict_get_or(visibility_result, "metadata_path", "")))
+}
+
+func command_api_search(cwd, parsed_cli) {
+	query := trim(to_string(positional(parsed_cli, 0, "")))
+	if query == "" {
+		print("Usage: kennel api-search <query> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH]")
+		exit(1)
+	}
+	context := resolve_registry_request_context(cwd, parsed_cli, false)
+	if context["ok"] == false {
+		print(context["error"])
+		exit(1)
+	}
+	api_result := hosted_api_search_endpoint(query, {
+		"registry_dir": context["registry_dir"],
+		"user": context["user_context"]
+	})
+	if api_result["ok"] == false {
+		print(api_result["error"])
+		exit(1)
+	}
+	results := dict_get_or(api_result, "results", [])
+	print("Hosted API search results for `" + query + "`:")
+	for entry in results {
+		print(to_string(dict_get_or(entry, "name", "")) + " | " + to_string(dict_get_or(entry, "latest", "")) + " | " + to_string(dict_get_or(entry, "visibility", "public")))
+	}
+}
+
+func command_api_metadata(cwd, parsed_cli) {
+	package_name := trim(to_string(positional(parsed_cli, 0, "")))
+	if package_name == "" {
+		print("Usage: kennel api-metadata <package> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH]")
+		exit(1)
+	}
+	package_name = require_identifier(package_name, "Package name")
+	context := resolve_registry_request_context(cwd, parsed_cli, false)
+	if context["ok"] == false {
+		print(context["error"])
+		exit(1)
+	}
+	api_result := hosted_api_package_metadata_endpoint(package_name, {
+		"registry_dir": context["registry_dir"],
+		"user": context["user_context"]
+	})
+	if api_result["ok"] == false {
+		print(api_result["error"])
+		exit(1)
+	}
+	print(to_json(dict_get_or(api_result, "metadata", {})))
+}
+
+func command_install_hosted(cwd, parsed_cli) {
+	package_name := trim(to_string(positional(parsed_cli, 0, "")))
+	if package_name == "" {
+		print("Usage: kennel install-hosted <package> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH]")
+		exit(1)
+	}
+	package_name = require_identifier(package_name, "Package name")
+	loaded := ensure_project_manifest(cwd)
+	manifest_obj := loaded["manifest"]
+	trust_policy := trust_policy_from_manifest(manifest_obj)
+	source_policy := source_policy_with_cli_overrides(source_policy_from_manifest(manifest_obj), parsed_cli)
+	resolution_policy := resolution_policy_from_manifest(manifest_obj)
+	context := resolve_registry_request_context(cwd, parsed_cli, true)
+	if context["ok"] == false {
+		print(context["error"])
+		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before installing hosted packages.")
+		exit(1)
+	}
+	metadata_result := hosted_api_package_metadata_endpoint(package_name, {
+		"registry_dir": context["registry_dir"],
+		"user": context["user"]
+	})
+	if metadata_result["ok"] == false {
+		print(metadata_result["error"])
+		exit(1)
+	}
+	metadata_doc := dict_get_or(metadata_result, "metadata", {})
+	selected_version := select_hosted_version_entry(metadata_doc, package_name)
+	if selected_version["ok"] == false {
+		print(selected_version["error"])
+		exit(1)
+	}
+	version_entry := selected_version["entry"]
+	source_value := trim(to_string(dict_get_or(version_entry, "source", "")))
+	ref_value := trim(to_string(dict_get_or(version_entry, "ref", "")))
+	if source_value == "" {
+		print("Hosted package metadata for `" + package_name + "` is missing source metadata.")
+		exit(1)
+	}
+	source_input := source_value
+	if ref_value != "" {
+		if starts_with(source_value, "github:") {
+			source_input := source_value + "@" + ref_value
+		} else if starts_with(source_value, "https://github.com/") {
+			source_input := source_value + "#" + ref_value
+		}
+	}
+	parsed := parse_source_reference(source_input)
+	if parsed["ok"] == false {
+		print(parsed["error"])
+		exit(1)
+	}
+	parsed["name"] := package_name
+	parsed["checksum"] := trim(to_string(dict_get_or(version_entry, "checksum", "")))
+	parsed["signature"] := trim(to_string(dict_get_or(version_entry, "signature", "")))
+	parsed["signing_key"] := trim(to_string(dict_get_or(version_entry, "signing_key", "")))
+	state_snapshot := capture_project_state(cwd)
+	install_result := resolve_and_install_dependency(cwd, package_name, parsed, trust_policy, source_policy, resolution_policy)
+	if install_result["ok"] == false {
+		print(install_result["error"])
+		exit(1)
+	}
+	dep_entry := dependency_entry_from_source(parsed, package_name)
+	manifest_next := set_dependency(manifest_obj, package_name, dep_entry["entry"])
+	install_cache := {}
+	install_cache[package_name] := install_result
+	rebuild := rebuild_lockfile_from_manifest(cwd, manifest_next, trust_policy, install_cache, source_policy, resolution_policy)
+	if rebuild["ok"] == false {
+		print("Failed to rebuild lockfile after hosted install: " + rebuild["error"])
+		exit(1)
+	}
+	lock_next := dict_get_or(rebuild, "lockfile", {})
+	persisted := persist_project_state(cwd, state_snapshot, manifest_next, lock_next)
+	if persisted["ok"] == false {
+		print(persisted["error"])
+		exit(1)
+	}
+	resolved_version := selected_version["version"]
+	print("Installed hosted package `" + package_name + "@" + resolved_version + "` as `" + context["user"] + "` from registry `" + context["registry"] + "`.")
+	print("Updated kennel.lock")
+}
+
+export command_login := command_login
+export command_publish := command_publish
+export command_yank := command_yank
+export command_access := command_access
+export command_visibility := command_visibility
+export command_api_search := command_api_search
+export command_api_metadata := command_api_metadata
+export command_install_hosted := command_install_hosted

@@ -1,0 +1,10 @@
+from src.commands_hosted import command_login, command_publish, command_yank, command_access, command_visibility, command_api_search, command_api_metadata, command_install_hosted
+
+export command_login := command_login
+export command_publish := command_publish
+export command_yank := command_yank
+export command_access := command_access
+export command_visibility := command_visibility
+export command_api_search := command_api_search
+export command_api_metadata := command_api_metadata
+export command_install_hosted := command_install_hosted

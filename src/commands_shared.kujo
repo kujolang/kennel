@@ -1,0 +1,833 @@
+from cli import flag_value, has_flag
+from dependency_spec import parse_source_reference, source_ref_from_dependency_entry
+from error_shape import error_result
+from future_resolvers import auth_token_store, resolve_registry_index_name, verify_package_signature
+from installer import install_resolved
+from lockfile import empty_lockfile, load_lockfile, lockfile_path, save_lockfile, set_packages
+from manifest import dependency_map, ensure_manifest_shape, load_manifest, manifest_path, save_manifest
+from path_helpers import parent_dir_path
+from resolver import lock_entry_from_install, resolve_dependency_with_policy
+from src.utils import dict_get_or, run_shell, shell_quote, validate_identifier
+
+func ensure_project_manifest(cwd) {
+	loaded := load_manifest(cwd)
+	if loaded["ok"] == false {
+		print(loaded["error"])
+		exit(1)
+	}
+	manifest := ensure_manifest_shape(loaded["manifest"])
+	return {
+		"manifest": manifest,
+		"path": loaded["path"]
+	}
+}
+
+func resolve_and_install_dependency(cwd, dep_name, parsed_spec, trust_policy, source_policy, resolution_policy) {
+	policy_check := enforce_source_policy(dep_name, parsed_spec, source_policy)
+	if policy_check["ok"] == false {
+		return policy_check
+	}
+	resolved_result := resolve_dependency_with_policy(dep_name, parsed_spec, resolution_policy)
+	if resolved_result["ok"] == false {
+		return error_result(to_string(dict_get_or(resolved_result, "error", "Failed to resolve dependency.")), {
+			"operation": "resolve_and_install_dependency",
+			"dependency": dep_name,
+			"stage": "resolve"
+		})
+	}
+	install_result := install_resolved(cwd, resolved_result["resolved"])
+	if install_result["ok"] == false {
+		return error_result(to_string(dict_get_or(install_result, "error", "Failed to install dependency.")), {
+			"operation": "resolve_and_install_dependency",
+			"dependency": dep_name,
+			"stage": "install"
+		})
+	}
+	lock_candidate := lock_entry_from_install(install_result)
+	verification := verify_package_signature(lock_candidate, trust_policy)
+	if verification["ok"] == false {
+		return error_result(to_string(dict_get_or(verification, "error", "Dependency trust verification failed.")), {
+			"operation": "resolve_and_install_dependency",
+			"dependency": dep_name,
+			"stage": "trust_verify"
+		})
+	}
+	return {
+		"ok": true,
+		"install": install_result,
+		"verification": verification
+	}
+}
+
+func trust_policy_from_manifest(manifest_obj) {
+	trust_doc := dict_get_or(manifest_obj, "trust", {})
+	if type(trust_doc) != "dict" {
+		trust_doc := {}
+	}
+	return {
+		"checksum": trim(to_string(dict_get_or(trust_doc, "checksum", ""))),
+		"signature": trim(to_string(dict_get_or(trust_doc, "signature", ""))),
+		"signing_key": trim(to_string(dict_get_or(trust_doc, "signing_key", "")))
+	}
+}
+
+func source_policy_from_manifest(manifest_obj) {
+	policy_doc := dict_get_or(manifest_obj, "policy", {})
+	if type(policy_doc) != "dict" {
+		policy_doc := {}
+	}
+	source_doc := dict_get_or(policy_doc, "source", {})
+	if type(source_doc) != "dict" {
+		source_doc := {}
+	}
+	strict_mutable_refs := false
+	if has_key(source_doc, "strict_mutable_refs") {
+		strict_mutable_refs = source_doc["strict_mutable_refs"] == true
+	}
+	allow_mutable_refs := false
+	if has_key(source_doc, "allow_mutable_refs") {
+		allow_mutable_refs = source_doc["allow_mutable_refs"] == true
+	}
+	return {
+		"strict_mutable_refs": strict_mutable_refs,
+		"allow_mutable_refs": allow_mutable_refs,
+		"override_reason": "manifest"
+	}
+}
+
+func source_policy_with_cli_overrides(source_policy, parsed_cli) {
+	policy := source_policy
+	if type(policy) != "dict" {
+		policy := {
+			"strict_mutable_refs": false,
+			"allow_mutable_refs": false,
+			"override_reason": "default"
+		}
+	}
+	if has_flag(parsed_cli, "--allow-mutable-ref") {
+		policy["allow_mutable_refs"] := true
+		policy["override_reason"] := "cli:--allow-mutable-ref"
+	}
+	return policy
+}
+
+func resolution_policy_from_manifest(manifest_obj) {
+	policy_doc := dict_get_or(manifest_obj, "policy", {})
+	if type(policy_doc) != "dict" {
+		policy_doc := {}
+	}
+	resolution_doc := dict_get_or(policy_doc, "resolution", {})
+	if type(resolution_doc) != "dict" {
+		resolution_doc := {}
+	}
+	semver_ranges := false
+	if has_key(resolution_doc, "semver_ranges") {
+		semver_ranges = resolution_doc["semver_ranges"] == true
+	}
+	return {
+		"semver_ranges": semver_ranges
+	}
+}
+
+func enforce_source_policy(dep_name, parsed_spec, source_policy) {
+	if type(source_policy) != "dict" {
+		return {
+			"ok": true
+		}
+	}
+	strict_mutable_refs := dict_get_or(source_policy, "strict_mutable_refs", false) == true
+	if strict_mutable_refs == false {
+		return {
+			"ok": true
+		}
+	}
+	if dict_get_or(source_policy, "allow_mutable_refs", false) == true {
+		return {
+			"ok": true
+		}
+	}
+	kind := trim(to_string(dict_get_or(parsed_spec, "kind", "")))
+	if kind == "path" {
+		return {
+			"ok": true
+		}
+	}
+	requested_kind := trim(to_string(dict_get_or(parsed_spec, "requested_kind", "none")))
+	if requested_kind == "none" || requested_kind == "ref" {
+		requested_value := trim(to_string(dict_get_or(parsed_spec, "requested", "")))
+		if requested_value == "" {
+			requested_value = "HEAD"
+		}
+		return error_result("Dependency source policy blocked mutable ref for `" + dep_name + "` (`" + requested_value + "`). Pin to commit/version/tag, or re-run with `--allow-mutable-ref` to explicitly override.", {
+			"operation": "enforce_source_policy",
+			"dependency": dep_name,
+			"source": trim(to_string(dict_get_or(parsed_spec, "source", ""))),
+			"requested": requested_value,
+			"requested_kind": requested_kind,
+			"override_reason": to_string(dict_get_or(source_policy, "override_reason", "none"))
+		})
+	}
+	return {
+		"ok": true
+	}
+}
+
+func require_identifier(value, label) {
+	validated := validate_identifier(value, label)
+	if validated["ok"] == false {
+		print(validated["error"])
+		exit(1)
+	}
+	return validated["value"]
+}
+
+func capture_project_state(cwd) {
+	manifest_file := manifest_path(cwd)
+	lock_file := lockfile_path(cwd)
+	manifest_exists := file_exists(manifest_file)
+	lock_exists := file_exists(lock_file)
+	manifest_raw := ""
+	lock_raw := ""
+	if manifest_exists {
+		manifest_raw = read_file(manifest_file)
+	}
+	if lock_exists {
+		lock_raw = read_file(lock_file)
+	}
+	return {
+		"cwd": cwd,
+		"manifest_path": manifest_file,
+		"lock_path": lock_file,
+		"manifest_exists": manifest_exists,
+		"manifest_raw": manifest_raw,
+		"lock_exists": lock_exists,
+		"lock_raw": lock_raw
+	}
+}
+
+func restore_project_state(snapshot) {
+	manifest_file := to_string(dict_get_or(snapshot, "manifest_path", ""))
+	lock_file := to_string(dict_get_or(snapshot, "lock_path", ""))
+	if dict_get_or(snapshot, "manifest_exists", false) {
+		write_file(manifest_file, to_string(dict_get_or(snapshot, "manifest_raw", "")), true)
+	} else {
+		if manifest_file != "" && file_exists(manifest_file) {
+			run_shell("rm -f " + shell_quote(manifest_file))
+		}
+	}
+	if dict_get_or(snapshot, "lock_exists", false) {
+		write_file(lock_file, to_string(dict_get_or(snapshot, "lock_raw", "")), true)
+	} else {
+		if lock_file != "" && file_exists(lock_file) {
+			run_shell("rm -f " + shell_quote(lock_file))
+		}
+	}
+}
+
+func persist_project_state(cwd, snapshot, manifest_obj, lock_obj) {
+	try {
+		save_manifest(cwd, manifest_obj)
+		if type(lock_obj) == "dict" {
+			save_lockfile(cwd, lock_obj)
+		}
+		return {
+			"ok": true
+		}
+	} except err {
+		restore_project_state(snapshot)
+		return {
+			"ok": false,
+			"error": "Failed to persist manifest/lockfile state: " + to_string(err)
+		}
+	}
+}
+
+func replace_lock_entry(entries, name, new_entry) {
+	updated := []
+	for entry in entries {
+		if to_string(dict_get_or(entry, "name", "")) == name {
+			continue
+		}
+		updated := push(updated, entry)
+	}
+	updated := push(updated, new_entry)
+	return updated
+}
+
+func lockfile_with_updated_install(cwd, package_name, install_result) {
+	entry := lock_entry_from_install(install_result)
+	lock_loaded := load_lockfile(cwd)
+	entries := []
+	if lock_loaded["ok"] {
+		entries = dict_get_or(lock_loaded["lockfile"], "package", [])
+	}
+	entries = replace_lock_entry(entries, package_name, entry)
+	lock_doc := empty_lockfile()
+	lock_doc = set_packages(lock_doc, entries)
+	return lock_doc
+}
+
+func resolve_registry_request_context(cwd, parsed_cli, require_auth) {
+	raw_registry := trim(to_string(flag_value(parsed_cli, "--registry", "default")))
+	if raw_registry == "" {
+		raw_registry = "default"
+	}
+	registry_name := require_identifier(raw_registry, "Registry name")
+	raw_user := trim(to_string(flag_value(parsed_cli, "--user", "default")))
+	if raw_user == "" {
+		raw_user = "default"
+	}
+	user_name := require_identifier(raw_user, "User name")
+	raw_store_path := trim(to_string(flag_value(parsed_cli, "--store-path", "")))
+	token_payload := {
+		"registry": registry_name,
+		"user": user_name
+	}
+	if raw_store_path != "" {
+		resolved_store_path := raw_store_path
+		if starts_with(raw_store_path, "/") == false {
+			resolved_store_path := path_absolute(cwd + "/" + raw_store_path)
+		}
+		token_payload["store_path"] := resolved_store_path
+	}
+	token_lookup := auth_token_store("get", token_payload)
+	if require_auth && token_lookup["ok"] == false {
+		return error_result(to_string(dict_get_or(token_lookup, "error", "Auth token lookup failed.")), {
+			"operation": "resolve_registry_request_context",
+			"registry": registry_name,
+			"user": user_name,
+			"require_auth": require_auth
+		})
+	}
+	raw_registry_dir := trim(to_string(flag_value(parsed_cli, "--registry-dir", ".kennel_registry")))
+	registry_dir := raw_registry_dir
+	if starts_with(raw_registry_dir, "/") == false {
+		registry_dir := path_absolute(cwd + "/" + raw_registry_dir)
+	}
+	user_context := ""
+	if token_lookup["ok"] {
+		user_context = user_name
+	}
+	return {
+		"ok": true,
+		"registry": registry_name,
+		"user": user_name,
+		"registry_dir": registry_dir,
+		"token_lookup": token_lookup,
+		"user_context": user_context
+	}
+}
+
+func print_supported_source_guidance() {
+	print("Supported sources:")
+	print("  github:owner/repo@ref")
+	print("  github:owner/repo")
+	print("  https://github.com/owner/repo.git#ref")
+	print("  file:../local-package or ../local-package")
+	print("Name-based add (requires static index configuration):")
+	print("  package-name")
+	print("Use `kennel help` for command usage details.")
+}
+
+func index_lookup_path(cwd, manifest_obj) {
+	lookup := index_lookup_paths(cwd, manifest_obj)
+	if lookup["ok"] == false {
+		return lookup
+	}
+	paths := dict_get_or(lookup, "paths", [])
+	if len(paths) == 0 {
+		return error_result("No usable static index files were found.", {
+			"operation": "index_lookup_path",
+			"cwd": cwd,
+			"stage": "no_paths"
+		})
+	}
+	return {
+		"ok": true,
+		"path": paths[0],
+		"paths": paths,
+		"warnings": dict_get_or(lookup, "warnings", [])
+	}
+}
+
+func index_lookup_paths(cwd, manifest_obj) {
+	registry_cfg := dict_get_or(manifest_obj, "registry", {})
+	configured := []
+	primary_index := trim(to_string(dict_get_or(registry_cfg, "index", "")))
+	if primary_index != "" {
+		configured = push(configured, primary_index)
+	}
+	mirror_indexes := dict_get_or(registry_cfg, "mirrors", [])
+	if type(mirror_indexes) == "array" {
+		for mirror_entry in mirror_indexes {
+			mirror_value := trim(to_string(mirror_entry))
+			if mirror_value != "" {
+				configured = push(configured, mirror_value)
+			}
+		}
+	}
+	if len(configured) == 0 {
+		default_index := cwd + "/index.json"
+		if file_exists(default_index) {
+			return {
+				"ok": true,
+				"paths": [default_index],
+				"warnings": []
+			}
+		}
+		return error_result("Static index path is not configured. Set `[registry].index` in kennel.toml or place index.json in the project directory.", {
+			"operation": "index_lookup_paths",
+			"cwd": cwd,
+			"stage": "missing_index"
+		})
+	}
+	resolved_paths := []
+	warnings := []
+	for configured_index in configured {
+		if starts_with(configured_index, "http://") || starts_with(configured_index, "https://") {
+			warnings = push(warnings, "Skipping unsupported remote static index URL: " + configured_index)
+			continue
+		}
+		resolved_path := configured_index
+		if starts_with(configured_index, "/") == false {
+			resolved_path = path_absolute(cwd + "/" + configured_index)
+		}
+		if file_exists(resolved_path) == false {
+			warnings = push(warnings, "Skipping missing static index file: " + resolved_path)
+			continue
+		}
+		resolved_paths = push(resolved_paths, resolved_path)
+	}
+	if len(resolved_paths) == 0 {
+		return error_result("No configured static index files were usable. Check `[registry].index` and `[registry].mirrors` paths.", {
+			"operation": "index_lookup_paths",
+			"cwd": cwd,
+			"configured": configured,
+			"warnings": warnings,
+			"stage": "no_usable_indexes"
+		})
+	}
+	return {
+		"ok": true,
+		"paths": resolved_paths,
+		"warnings": warnings
+	}
+}
+
+func load_static_index(index_path) {
+	raw_json := read_file(index_path)
+	try {
+		parsed := parse_json(raw_json)
+		if type(parsed) != "dict" {
+			return error_result("Static index file must contain a JSON object: " + index_path, {
+				"operation": "load_static_index",
+				"index_path": index_path,
+				"stage": "non_object_json"
+			})
+		}
+		return {
+			"ok": true,
+			"index": parsed
+		}
+	} except err {
+		return error_result("Invalid static index JSON: " + to_string(err), {
+			"operation": "load_static_index",
+			"index_path": index_path,
+			"stage": "invalid_json"
+		})
+	}
+}
+
+func resolve_metadata_file_path(cwd, index_path, metadata_path) {
+	raw_metadata := trim(to_string(metadata_path))
+	if raw_metadata == "" {
+		return ""
+	}
+	if starts_with(raw_metadata, "/") {
+		return raw_metadata
+	}
+	index_dir := parent_dir_path(index_path)
+	from_index := path_absolute(index_dir + "/" + raw_metadata)
+	if file_exists(from_index) {
+		return from_index
+	}
+	from_project := path_absolute(cwd + "/" + raw_metadata)
+	if file_exists(from_project) {
+		return from_project
+	}
+	return from_index
+}
+
+func load_registry_package_metadata(cwd, index_path, metadata_path) {
+	metadata_file := resolve_metadata_file_path(cwd, index_path, metadata_path)
+	if metadata_file == "" {
+		return error_result("Static index metadata_path is missing for package info lookup.", {
+			"operation": "load_registry_package_metadata",
+			"cwd": cwd,
+			"index_path": index_path,
+			"stage": "missing_metadata_path"
+		})
+	}
+	if file_exists(metadata_file) == false {
+		return error_result("Package metadata file was not found: " + metadata_file, {
+			"operation": "load_registry_package_metadata",
+			"cwd": cwd,
+			"index_path": index_path,
+			"metadata_path": to_string(metadata_path),
+			"resolved_metadata_path": metadata_file,
+			"stage": "missing_metadata_file"
+		})
+	}
+	raw_metadata := read_file(metadata_file)
+	try {
+		parsed := parse_json(raw_metadata)
+		if type(parsed) != "dict" {
+			return error_result("Package metadata file must contain a JSON object: " + metadata_file, {
+				"operation": "load_registry_package_metadata",
+				"cwd": cwd,
+				"index_path": index_path,
+				"resolved_metadata_path": metadata_file,
+				"stage": "non_object_json"
+			})
+		}
+		return {
+			"ok": true,
+			"metadata": parsed,
+			"path": metadata_file
+		}
+	} except err {
+		return error_result("Invalid package metadata JSON: " + to_string(err), {
+			"operation": "load_registry_package_metadata",
+			"cwd": cwd,
+			"index_path": index_path,
+			"resolved_metadata_path": metadata_file,
+			"stage": "invalid_json"
+		})
+	}
+}
+
+func resolve_name_based_source(cwd, manifest_obj, package_name) {
+	lookup := index_lookup_paths(cwd, manifest_obj)
+	if lookup["ok"] == false {
+		return lookup
+	}
+	index_paths := dict_get_or(lookup, "paths", [])
+	lookup_warnings := dict_get_or(lookup, "warnings", [])
+	for index_path in index_paths {
+		loaded := load_static_index(index_path)
+		if loaded["ok"] == false {
+			lookup_warnings = push(lookup_warnings, to_string(dict_get_or(loaded, "error", "Failed to load static index.")))
+			continue
+		}
+		constraints := {
+			"index": loaded["index"]
+		}
+		resolved := resolve_registry_index_name(package_name, constraints)
+		if resolved["ok"] == false {
+			lookup_warnings = push(lookup_warnings, to_string(dict_get_or(resolved, "error", "Failed to resolve package from static index.")))
+			continue
+		}
+		source_value := trim(to_string(dict_get_or(resolved, "source", "")))
+		ref_value := trim(to_string(dict_get_or(resolved, "ref", "")))
+		if source_value == "" {
+			lookup_warnings = push(lookup_warnings, "Resolved index metadata for `" + package_name + "` did not include a source value.")
+			continue
+		}
+		source_input := source_value
+		if ref_value != "" {
+			if starts_with(source_value, "github:") {
+				source_input := source_value + "@" + ref_value
+			} else if starts_with(source_value, "https://github.com/") {
+				source_input := source_value + "#" + ref_value
+			}
+		}
+		parsed := parse_source_reference(source_input)
+		if parsed["ok"] == false {
+			lookup_warnings = push(lookup_warnings, to_string(dict_get_or(parsed, "error", "Failed to parse source input.")))
+			continue
+		}
+		parsed["checksum"] := trim(to_string(dict_get_or(resolved, "checksum", "")))
+		parsed["signature"] := trim(to_string(dict_get_or(resolved, "signature", "")))
+		parsed["signing_key"] := trim(to_string(dict_get_or(resolved, "signing_key", "")))
+		parsed["name"] := package_name
+		return {
+			"ok": true,
+			"index_path": index_path,
+			"resolved": resolved,
+			"parsed": parsed,
+			"warnings": lookup_warnings
+		}
+	}
+	return error_result("Package `" + package_name + "` was not found in configured static indexes.", {
+		"operation": "resolve_name_based_source",
+		"package": package_name,
+		"index_paths": index_paths,
+		"warnings": lookup_warnings,
+		"stage": "not_found_in_any_index"
+	})
+}
+
+func dependency_spec_descriptor(parsed_spec) {
+	source_value := trim(to_string(dict_get_or(parsed_spec, "source", "")))
+	if source_value == "" {
+		source_value = trim(to_string(dict_get_or(parsed_spec, "path", "")))
+	}
+	requested_value := trim(to_string(dict_get_or(parsed_spec, "requested", "")))
+	if requested_value == "" {
+		return source_value
+	}
+	return source_value + "@" + requested_value
+}
+
+func dependency_spec_fingerprint(parsed_spec) {
+	kind := trim(to_string(dict_get_or(parsed_spec, "kind", "")))
+	source_value := trim(to_string(dict_get_or(parsed_spec, "source", "")))
+	if source_value == "" {
+		source_value = trim(to_string(dict_get_or(parsed_spec, "path", "")))
+	}
+	requested_kind := trim(to_string(dict_get_or(parsed_spec, "requested_kind", "none")))
+	requested_value := trim(to_string(dict_get_or(parsed_spec, "requested", "")))
+	return kind + "|" + source_value + "|" + requested_kind + "|" + requested_value
+}
+
+func resolve_manifest_dependency_graph(cwd, manifest_obj, trust_policy, install_cache, source_policy, resolution_policy) {
+	root_deps := dependency_map(manifest_obj)
+	pending_requests := []
+	if type(root_deps) == "dict" {
+		for root_dep_name in keys(root_deps) {
+			pending_requests = push(pending_requests, {
+				"name": root_dep_name,
+				"entry": root_deps[root_dep_name],
+				"parent": "root"
+			})
+		}
+	}
+	processed := {}
+	spec_fingerprints := {}
+	spec_descriptors := {}
+	spec_parents := {}
+	installs := {}
+	pending_index := 0
+	while pending_index < len(pending_requests) {
+		request := pending_requests[pending_index]
+		pending_index = pending_index + 1
+		dep_name := trim(to_string(dict_get_or(request, "name", "")))
+		dep_entry := dict_get_or(request, "entry", {})
+		parent_name := trim(to_string(dict_get_or(request, "parent", "root")))
+		if dep_name == "" {
+			return error_result("Dependency graph includes an empty dependency name.", {
+				"operation": "resolve_manifest_dependency_graph",
+				"stage": "empty_dependency_name",
+				"parent": parent_name
+			})
+		}
+		spec_parse := source_ref_from_dependency_entry(dep_name, dep_entry)
+		if spec_parse["ok"] == false {
+			return error_result(to_string(dict_get_or(spec_parse, "error", "Failed to parse dependency source.")), {
+				"operation": "resolve_manifest_dependency_graph",
+				"dependency": dep_name,
+				"parent": parent_name,
+				"stage": "parse_dependency_entry"
+			})
+		}
+		spec_fingerprint := dependency_spec_fingerprint(spec_parse)
+		spec_descriptor := dependency_spec_descriptor(spec_parse)
+		if has_key(spec_fingerprints, dep_name) == 1 {
+			existing_fingerprint := to_string(spec_fingerprints[dep_name])
+			if existing_fingerprint != spec_fingerprint {
+				previous_parent := to_string(dict_get_or(spec_parents, dep_name, "root"))
+				previous_descriptor := to_string(dict_get_or(spec_descriptors, dep_name, "<unknown>"))
+				return error_result("Dependency conflict for `" + dep_name + "`: `" + parent_name + "` requested `" + spec_descriptor + "`, but `" + previous_parent + "` already requested `" + previous_descriptor + "`. Align dependency sources/refs to a single value.", {
+					"operation": "resolve_manifest_dependency_graph",
+					"dependency": dep_name,
+					"parent": parent_name,
+					"existing_parent": previous_parent,
+					"requested": spec_descriptor,
+					"existing": previous_descriptor,
+					"stage": "conflicting_transitive_specs"
+				})
+			}
+		} else {
+			spec_fingerprints[dep_name] := spec_fingerprint
+			spec_descriptors[dep_name] := spec_descriptor
+			spec_parents[dep_name] := parent_name
+		}
+		if has_key(processed, dep_name) == 0 {
+			resolved_install := {}
+			if type(install_cache) == "dict" && has_key(install_cache, dep_name) == 1 {
+				cached := install_cache[dep_name]
+				if type(cached) == "dict" && dict_get_or(cached, "ok", false) {
+					resolved_install := cached
+				}
+			}
+			if type(resolved_install) != "dict" || dict_get_or(resolved_install, "ok", false) == false {
+				resolved_install := resolve_and_install_dependency(cwd, dep_name, spec_parse, trust_policy, source_policy, resolution_policy)
+				if resolved_install["ok"] == false {
+					return error_result(to_string(dict_get_or(resolved_install, "error", "Failed to resolve and install dependency.")), {
+						"operation": "resolve_manifest_dependency_graph",
+						"dependency": dep_name,
+						"parent": parent_name,
+						"stage": "resolve_install"
+					})
+				}
+			}
+			install_doc := resolved_install["install"]
+			installs[dep_name] := install_doc
+			processed[dep_name] := true
+			child_deps := dict_get_or(install_doc, "dependencies", {})
+			if type(child_deps) != "dict" {
+				child_deps := {}
+			}
+			for child_dep_name in keys(child_deps) {
+				pending_requests = push(pending_requests, {
+					"name": child_dep_name,
+					"entry": child_deps[child_dep_name],
+					"parent": dep_name
+				})
+			}
+		}
+	}
+	return {
+		"ok": true,
+		"installs": installs
+	}
+}
+
+func rebuild_lockfile_from_manifest(cwd, manifest_obj, trust_policy, install_cache, source_policy, resolution_policy) {
+	graph_result := resolve_manifest_dependency_graph(cwd, manifest_obj, trust_policy, install_cache, source_policy, resolution_policy)
+	if graph_result["ok"] == false {
+		return error_result(to_string(dict_get_or(graph_result, "error", "Failed to resolve manifest dependency graph.")), {
+			"operation": "rebuild_lockfile_from_manifest",
+			"stage": "resolve_manifest_dependency_graph"
+		})
+	}
+	installs := dict_get_or(graph_result, "installs", {})
+	entries := []
+	for dep_name in keys(installs) {
+		install_doc := installs[dep_name]
+		entries := push(entries, lock_entry_from_install(install_doc))
+	}
+	lockfile := empty_lockfile()
+	lockfile = set_packages(lockfile, entries)
+	return {
+		"ok": true,
+		"entries": entries,
+		"lockfile": lockfile
+	}
+}
+
+func find_entry_by_name(entries, name) {
+	for entry in entries {
+		if to_string(entry["name"]) == name {
+			return {
+				"ok": true,
+				"entry": entry
+			}
+		}
+	}
+	return {
+		"ok": false,
+		"entry": {}
+	}
+}
+
+func read_login_token_from_file(cwd, token_file_input) {
+	resolved_path := trim(to_string(token_file_input))
+	if resolved_path == "" {
+		return error_result("Token file path cannot be empty.", {
+			"operation": "read_login_token_from_file",
+			"cwd": cwd,
+			"stage": "empty_path"
+		})
+	}
+	if starts_with(resolved_path, "/") == false {
+		resolved_path := path_absolute(cwd + "/" + resolved_path)
+	}
+	if file_exists(resolved_path) == false {
+		return error_result("Token file was not found: " + resolved_path, {
+			"operation": "read_login_token_from_file",
+			"cwd": cwd,
+			"resolved_path": resolved_path,
+			"stage": "missing_file"
+		})
+	}
+	token_value := trim(to_string(read_file(resolved_path)))
+	if token_value == "" {
+		return error_result("Token file is empty: " + resolved_path, {
+			"operation": "read_login_token_from_file",
+			"cwd": cwd,
+			"resolved_path": resolved_path,
+			"stage": "empty_token"
+		})
+	}
+	return {
+		"ok": true,
+		"token": token_value,
+		"path": resolved_path
+	}
+}
+
+func select_hosted_version_entry(metadata_doc, package_name) {
+	versions := dict_get_or(metadata_doc, "versions", [])
+	if type(versions) != "array" || len(versions) == 0 {
+		return error_result("Hosted package metadata for `" + package_name + "` does not contain any versions.", {
+			"operation": "select_hosted_version_entry",
+			"package": package_name,
+			"stage": "missing_versions"
+		})
+	}
+	latest_version := trim(to_string(dict_get_or(metadata_doc, "latest", "")))
+	if latest_version != "" {
+		for entry in versions {
+			if trim(to_string(dict_get_or(entry, "version", ""))) == latest_version {
+				return {
+					"ok": true,
+					"version": latest_version,
+					"entry": entry
+				}
+			}
+		}
+	}
+	selected := versions[0]
+	selected_version := trim(to_string(dict_get_or(selected, "version", "")))
+	if selected_version == "" {
+		selected_version = "<unknown>"
+	}
+	return {
+		"ok": true,
+		"version": selected_version,
+		"entry": selected
+	}
+}
+
+func update_should_skip(parsed_spec) {
+	requested_kind := dict_get_or(parsed_spec, "requested_kind", "none")
+	if requested_kind == "commit" || requested_kind == "version" || requested_kind == "tag" {
+		return true
+	}
+	return false
+}
+
+export ensure_project_manifest := ensure_project_manifest
+export resolve_and_install_dependency := resolve_and_install_dependency
+export trust_policy_from_manifest := trust_policy_from_manifest
+export source_policy_from_manifest := source_policy_from_manifest
+export source_policy_with_cli_overrides := source_policy_with_cli_overrides
+export resolution_policy_from_manifest := resolution_policy_from_manifest
+export enforce_source_policy := enforce_source_policy
+export require_identifier := require_identifier
+export capture_project_state := capture_project_state
+export persist_project_state := persist_project_state
+export lockfile_with_updated_install := lockfile_with_updated_install
+export resolve_registry_request_context := resolve_registry_request_context
+export print_supported_source_guidance := print_supported_source_guidance
+export index_lookup_path := index_lookup_path
+export index_lookup_paths := index_lookup_paths
+export load_static_index := load_static_index
+export load_registry_package_metadata := load_registry_package_metadata
+export resolve_name_based_source := resolve_name_based_source
+export rebuild_lockfile_from_manifest := rebuild_lockfile_from_manifest
+export find_entry_by_name := find_entry_by_name
+export read_login_token_from_file := read_login_token_from_file
+export select_hosted_version_entry := select_hosted_version_entry
+export update_should_skip := update_should_skip

@@ -1,0 +1,764 @@
+test_setup {
+	from cli import flag_value, has_flag, parse_cli, positional
+	from commands_shared import load_static_index, read_login_token_from_file
+	from dependency_spec import parse_source_reference
+	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_hosted_registry_name, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version
+	from lockfile import empty_lockfile, set_packages
+	from manifest import default_manifest
+	from resolver import format_git_ls_remote_error, resolve_dependency
+	from utils import dict_get_or
+}
+
+test "hosted auth token store supports set/get/clear lifecycle" {
+	store_path := "/tmp/kennel-auth-token-store-test.json"
+	execute_status("rm -f '" + store_path + "'")
+
+	set_result := auth_token_store("set", {
+		"store_path": store_path,
+		"registry": "local-hosted",
+		"user": "alice",
+		"token": "token-alice-123"
+	})
+	assert_equal(set_result["ok"], true)
+	assert_equal(set_result["store_path"], store_path)
+
+	permissions_result := execute_status("ls -l '" + store_path + "'")
+	assert_equal(permissions_result.success, true)
+	assert_true(index_of(to_string(permissions_result.stdout), "rw-------") >= 0)
+
+	get_result := auth_token_store("get", {
+		"store_path": store_path,
+		"registry": "local-hosted",
+		"user": "alice"
+	})
+	assert_equal(get_result["ok"], true)
+	assert_equal(get_result["token"], "token-alice-123")
+
+	list_result := auth_token_store("list", {
+		"store_path": store_path
+	})
+	assert_equal(list_result["ok"], true)
+	assert_true(len(list_result["entries"]) >= 1)
+
+	clear_result := auth_token_store("clear", {
+		"store_path": store_path,
+		"registry": "local-hosted",
+		"user": "alice"
+	})
+	assert_equal(clear_result["ok"], true)
+
+	get_after_clear := auth_token_store("get", {
+		"store_path": store_path,
+		"registry": "local-hosted",
+		"user": "alice"
+	})
+	assert_equal(get_after_clear["ok"], false)
+
+	execute_status("rm -f '" + store_path + "'")
+}
+
+test "hosted auth token store uses stable default path instead of cwd token file" {
+	resolved_default := token_store_path({})
+	assert_true(ends_with(resolved_default, "/.kennel/tokens.json"))
+
+	cwd_result := execute_status("pwd")
+	assert_equal(cwd_result.success, true)
+	cwd_path := trim(to_string(cwd_result.stdout))
+	assert_true(resolved_default != cwd_path + "/.kennel_tokens.json")
+}
+
+test "hosted publish writes index and package metadata artifacts" {
+	project_dir := "/tmp/kennel-publish-contract"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	manifest_obj := default_manifest("publish-demo")
+	manifest_package := manifest_obj["package"]
+	manifest_package["version"] := "1.2.3"
+	manifest_package["description"] := "Publish contract fixture"
+	manifest_obj["package"] := manifest_package
+	manifest_obj["trust"] := {
+		"checksum": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+		"signature": "cHVibGlzaC1kZW1vLTEyMw==",
+		"signing_key": "key.publish-demo-123"
+	}
+
+	publish_result := publish_package(project_dir, {
+		"manifest": manifest_obj,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-publish-123",
+		"registry_dir": registry_dir
+	})
+	assert_equal(publish_result["ok"], true)
+	assert_true(file_exists(registry_dir + "/index.json"))
+	assert_true(file_exists(registry_dir + "/packages/publish-demo.json"))
+
+	index_doc := parse_json(read_file(registry_dir + "/index.json"))
+	assert_equal(len(index_doc["packages"]), 1)
+	assert_equal(index_doc["packages"][0]["name"], "publish-demo")
+	assert_equal(index_doc["packages"][0]["latest"], "1.2.3")
+	assert_equal(index_doc["packages"][0]["versions"][0]["checksum"], "sha256:2222222222222222222222222222222222222222222222222222222222222222")
+	assert_equal(index_doc["packages"][0]["versions"][0]["signature"], "cHVibGlzaC1kZW1vLTEyMw==")
+	assert_equal(index_doc["packages"][0]["versions"][0]["signing_key"], "key.publish-demo-123")
+
+	metadata_doc := parse_json(read_file(registry_dir + "/packages/publish-demo.json"))
+	assert_equal(metadata_doc["name"], "publish-demo")
+	assert_equal(metadata_doc["latest"], "1.2.3")
+	assert_equal(len(metadata_doc["versions"]), 1)
+	assert_equal(metadata_doc["versions"][0]["checksum"], "sha256:2222222222222222222222222222222222222222222222222222222222222222")
+	assert_equal(metadata_doc["versions"][0]["signature"], "cHVibGlzaC1kZW1vLTEyMw==")
+	assert_equal(metadata_doc["versions"][0]["signing_key"], "key.publish-demo-123")
+
+	duplicate_publish := publish_package(project_dir, {
+		"manifest": manifest_obj,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-publish-123",
+		"registry_dir": registry_dir
+	})
+	assert_equal(duplicate_publish["ok"], false)
+	assert_true(index_of(to_string(duplicate_publish["error"]), "already contains version") >= 0)
+
+	manifest_v2 := default_manifest("publish-demo")
+	manifest_v2_package := manifest_v2["package"]
+	manifest_v2_package["version"] := "1.2.4"
+	manifest_v2["package"] := manifest_v2_package
+	non_owner_publish := publish_package(project_dir, {
+		"manifest": manifest_v2,
+		"registry": "hosted-registry",
+		"user": "bob",
+		"token": "token-publish-bob",
+		"registry_dir": registry_dir
+	})
+	assert_equal(non_owner_publish["ok"], false)
+	assert_true(index_of(to_string(non_owner_publish["error"]), "Only package owners can publish new versions") >= 0)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted publish safely handles quoted registry_dir paths" {
+	project_dir := "/tmp/kennel-publish-quoted-registry"
+	registry_dir := "/tmp/kennel-registry-o'reilly"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("rm -rf \"" + registry_dir + "\"")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	manifest_obj := default_manifest("quoted-registry-demo")
+	package_table := manifest_obj["package"]
+	package_table["version"] := "0.9.0"
+	manifest_obj["package"] := package_table
+
+	publish_result := publish_package(project_dir, {
+		"manifest": manifest_obj,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-quoted-123",
+		"registry_dir": registry_dir
+	})
+	assert_equal(publish_result["ok"], true)
+	assert_equal(file_exists(registry_dir + "/index.json"), true)
+	assert_equal(file_exists(registry_dir + "/packages/quoted-registry-demo.json"), true)
+
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("rm -rf \"" + registry_dir + "\"")
+}
+
+test "hosted publish rejects invalid package, registry, and user identifiers" {
+	project_dir := "/tmp/kennel-publish-identifier-validation"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	invalid_package_manifest := default_manifest("safe-name")
+	invalid_package_table := invalid_package_manifest["package"]
+	invalid_package_table["name"] := "../escape"
+	invalid_package_manifest["package"] := invalid_package_table
+	invalid_package_publish := publish_package(project_dir, {
+		"manifest": invalid_package_manifest,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-invalid-package",
+		"registry_dir": registry_dir
+	})
+	assert_equal(invalid_package_publish["ok"], false)
+	assert_true(index_of(to_string(invalid_package_publish["error"]), "Package name must contain only") >= 0)
+
+	valid_manifest := default_manifest("identifier-safe-demo")
+	invalid_registry_publish := publish_package(project_dir, {
+		"manifest": valid_manifest,
+		"registry": "bad registry!",
+		"user": "alice",
+		"token": "token-invalid-registry",
+		"registry_dir": registry_dir
+	})
+	assert_equal(invalid_registry_publish["ok"], false)
+	assert_true(index_of(to_string(invalid_registry_publish["error"]), "Registry name must contain only") >= 0)
+
+	invalid_user_publish := publish_package(project_dir, {
+		"manifest": valid_manifest,
+		"registry": "hosted-registry",
+		"user": "alice/admin",
+		"token": "token-invalid-user",
+		"registry_dir": registry_dir
+	})
+	assert_equal(invalid_user_publish["ok"], false)
+	assert_true(index_of(to_string(invalid_user_publish["error"]), "User name must contain only") >= 0)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted resolver operations reject invalid package and user identifiers" {
+	invalid_metadata := hosted_api_package_metadata_endpoint("../escape", {
+		"registry_dir": "/tmp/identifier-check-registry"
+	})
+	assert_equal(invalid_metadata["ok"], false)
+	assert_true(index_of(to_string(invalid_metadata["error"]), "Package name must contain only") >= 0)
+
+	invalid_resolve := resolve_hosted_registry_name("../escape", {
+		"registry_dir": "/tmp/identifier-check-registry"
+	})
+	assert_equal(invalid_resolve["ok"], false)
+	assert_true(index_of(to_string(invalid_resolve["error"]), "Package name must contain only") >= 0)
+
+	invalid_access_user := manage_package_access("pkg-safe", "list", {
+		"registry_dir": "/tmp/identifier-check-registry",
+		"user": "alice/admin"
+	})
+	assert_equal(invalid_access_user["ok"], false)
+	assert_true(index_of(to_string(invalid_access_user["error"]), "User name must contain only") >= 0)
+
+	invalid_visibility_user := set_package_visibility("pkg-safe", "public", {
+		"registry_dir": "/tmp/identifier-check-registry",
+		"user": "alice/admin"
+	})
+	assert_equal(invalid_visibility_user["ok"], false)
+	assert_true(index_of(to_string(invalid_visibility_user["error"]), "User name must contain only") >= 0)
+
+	invalid_yank_user := yank_package_version("pkg-safe", "1.0.0", {
+		"registry_dir": "/tmp/identifier-check-registry",
+		"user": "alice/admin"
+	})
+	assert_equal(invalid_yank_user["ok"], false)
+	assert_true(index_of(to_string(invalid_yank_user["error"]), "User name must contain only") >= 0)
+}
+
+test "hosted trust verifier enforces checksum and signature policy" {
+	lock_entry := {
+		"name": "signed-lib",
+		"checksum": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+		"signature": "c2lnbmVkLWxpYi0wMTA=",
+		"signing_key": "key.signed-lib-010"
+	}
+	strict_ok := verify_package_signature(lock_entry, {
+		"checksum": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+		"signature": "c2lnbmVkLWxpYi0wMTA=",
+		"signing_key": "key.signed-lib-010"
+	})
+	assert_equal(strict_ok["ok"], true)
+	assert_equal(strict_ok["mode"], "strict")
+
+	checksum_mismatch := verify_package_signature(lock_entry, {
+		"checksum": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+	})
+	assert_equal(checksum_mismatch["ok"], false)
+	assert_true(index_of(to_string(checksum_mismatch["error"]), "checksum does not match") >= 0)
+	assert_equal(checksum_mismatch["error_kind"], "trust_policy_mismatch")
+	assert_equal(checksum_mismatch["field"], "checksum")
+
+	signature_missing := verify_package_signature({
+		"name": "unsigned-lib",
+		"checksum": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+	}, {
+		"signature": "c2lnLXJlcXVpcmVk",
+		"signing_key": "key.required"
+	})
+	assert_equal(signature_missing["ok"], false)
+	assert_true(index_of(to_string(signature_missing["error"]), "missing signature metadata") >= 0)
+	assert_equal(signature_missing["error_kind"], "missing_package_metadata")
+	assert_equal(signature_missing["field"], "signature")
+
+	malformed_signature_metadata := verify_package_signature({
+		"name": "unsigned-lib",
+		"checksum": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+		"signature": "not_base64$",
+		"signing_key": "key.required"
+	}, {
+		"signature": "c2lnLXJlcXVpcmVk",
+		"signing_key": "key.required"
+	})
+	assert_equal(malformed_signature_metadata["ok"], false)
+	assert_true(index_of(to_string(malformed_signature_metadata["error"]), "malformed signature metadata") >= 0)
+	assert_equal(malformed_signature_metadata["error_kind"], "malformed_package_metadata")
+	assert_equal(malformed_signature_metadata["field"], "signature")
+
+	malformed_policy := verify_package_signature(lock_entry, {
+		"checksum": "sha256:not-hex"
+	})
+	assert_equal(malformed_policy["ok"], false)
+	assert_true(index_of(to_string(malformed_policy["error"]), "checksum is malformed") >= 0)
+	assert_equal(malformed_policy["error_kind"], "malformed_trust_policy")
+	assert_equal(malformed_policy["field"], "checksum")
+
+	malformed_policy_pairing := verify_package_signature(lock_entry, {
+		"signing_key": "key.required"
+	})
+	assert_equal(malformed_policy_pairing["ok"], false)
+	assert_true(index_of(to_string(malformed_policy_pairing["error"]), "signing_key requires signature") >= 0)
+	assert_equal(malformed_policy_pairing["error_kind"], "malformed_trust_policy")
+	assert_equal(malformed_policy_pairing["field"], "signature")
+}
+
+test "hosted yank toggles yanked state in index and package metadata" {
+	project_dir := "/tmp/kennel-yank-contract"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	manifest_obj := default_manifest("yank-demo")
+	manifest_package := manifest_obj["package"]
+	manifest_package["version"] := "2.0.0"
+	manifest_obj["package"] := manifest_package
+
+	publish_result := publish_package(project_dir, {
+		"manifest": manifest_obj,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-yank-123",
+		"registry_dir": registry_dir
+	})
+	assert_equal(publish_result["ok"], true)
+
+	yank_result := yank_package_version("yank-demo", "2.0.0", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"yank": true
+	})
+	assert_equal(yank_result["ok"], true)
+	assert_equal(yank_result["yanked"], true)
+
+	non_owner_yank := yank_package_version("yank-demo", "2.0.0", {
+		"registry_dir": registry_dir,
+		"user": "bob",
+		"yank": true
+	})
+	assert_equal(non_owner_yank["ok"], false)
+	assert_true(index_of(to_string(non_owner_yank["error"]), "Only package owners can yank versions") >= 0)
+
+	index_after_yank := parse_json(read_file(registry_dir + "/index.json"))
+	assert_equal(index_after_yank["packages"][0]["versions"][0]["yanked"], true)
+
+	metadata_after_yank := parse_json(read_file(registry_dir + "/packages/yank-demo.json"))
+	assert_equal(metadata_after_yank["versions"][0]["yanked"], true)
+
+	unyank_result := yank_package_version("yank-demo", "2.0.0", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"yank": false
+	})
+	assert_equal(unyank_result["ok"], true)
+	assert_equal(unyank_result["yanked"], false)
+
+	index_after_unyank := parse_json(read_file(registry_dir + "/index.json"))
+	assert_equal(index_after_unyank["packages"][0]["versions"][0]["yanked"], false)
+
+	missing_version := yank_package_version("yank-demo", "9.9.9", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"yank": true
+	})
+	assert_equal(missing_version["ok"], false)
+	assert_true(index_of(to_string(missing_version["error"]), "does not contain version") >= 0)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted access workflow manages owners and teams" {
+	project_dir := "/tmp/kennel-access-contract"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	manifest_obj := default_manifest("access-demo")
+	manifest_package := manifest_obj["package"]
+	manifest_package["version"] := "3.0.0"
+	manifest_obj["package"] := manifest_package
+
+	publish_result := publish_package(project_dir, {
+		"manifest": manifest_obj,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-access-123",
+		"registry_dir": registry_dir
+	})
+	assert_equal(publish_result["ok"], true)
+
+	non_owner_access := manage_package_access("access-demo", "owner-add", {
+		"registry_dir": registry_dir,
+		"user": "bob",
+		"target": "eve",
+		"role": "owner"
+	})
+	assert_equal(non_owner_access["ok"], false)
+	assert_true(index_of(to_string(non_owner_access["error"]), "Only package owners can manage access") >= 0)
+
+	owner_add := manage_package_access("access-demo", "owner-add", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"target": "bob",
+		"role": "maintainer"
+	})
+	assert_equal(owner_add["ok"], true)
+
+	team_add := manage_package_access("access-demo", "team-add", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"target": "core-team",
+		"permission": "publish"
+	})
+	assert_equal(team_add["ok"], true)
+
+	listed := manage_package_access("access-demo", "list", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(listed["ok"], true)
+	assert_true(len(listed["owners"]) >= 2)
+	assert_equal(len(listed["teams"]), 1)
+
+	owner_remove := manage_package_access("access-demo", "owner-remove", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"target": "bob"
+	})
+	assert_equal(owner_remove["ok"], true)
+
+	team_remove := manage_package_access("access-demo", "team-remove", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"target": "core-team"
+	})
+	assert_equal(team_remove["ok"], true)
+
+	owner_remove_last := manage_package_access("access-demo", "owner-remove", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"target": "alice"
+	})
+	assert_equal(owner_remove_last["ok"], false)
+	assert_true(index_of(to_string(owner_remove_last["error"]), "Cannot remove the last owner") >= 0)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted private visibility is persisted and owner-restricted" {
+	project_dir := "/tmp/kennel-private-contract"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	manifest_obj := default_manifest("private-demo")
+	manifest_package := manifest_obj["package"]
+	manifest_package["version"] := "4.0.0"
+	manifest_obj["package"] := manifest_package
+
+	publish_private := publish_package(project_dir, {
+		"manifest": manifest_obj,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-private-123",
+		"registry_dir": registry_dir,
+		"visibility": "private"
+	})
+	assert_equal(publish_private["ok"], true)
+	assert_equal(publish_private["visibility"], "private")
+
+	metadata_doc := parse_json(read_file(registry_dir + "/packages/private-demo.json"))
+	assert_equal(metadata_doc["visibility"], "private")
+	assert_equal(metadata_doc["versions"][0]["private"], true)
+
+	index_doc := parse_json(read_file(registry_dir + "/index.json"))
+	assert_equal(index_doc["packages"][0]["private"], true)
+	assert_equal(index_doc["packages"][0]["versions"][0]["private"], true)
+
+	not_owner_visibility := set_package_visibility("private-demo", "public", {
+		"registry_dir": registry_dir,
+		"user": "bob"
+	})
+	assert_equal(not_owner_visibility["ok"], false)
+	assert_true(index_of(to_string(not_owner_visibility["error"]), "Only package owners") >= 0)
+
+	owner_visibility := set_package_visibility("private-demo", "public", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(owner_visibility["ok"], true)
+
+	metadata_public := parse_json(read_file(registry_dir + "/packages/private-demo.json"))
+	assert_equal(metadata_public["visibility"], "public")
+	assert_equal(metadata_public["versions"][0]["private"], false)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted API search and metadata endpoints enforce private access" {
+	project_dir := "/tmp/kennel-hosted-api-contract"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	public_manifest := default_manifest("api-public")
+	public_result := publish_package(project_dir, {
+		"manifest": public_manifest,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-api-123",
+		"registry_dir": registry_dir,
+		"visibility": "public"
+	})
+	assert_equal(public_result["ok"], true)
+
+	private_manifest := default_manifest("api-private")
+	private_package := private_manifest["package"]
+	private_package["version"] := "0.2.0"
+	private_manifest["package"] := private_package
+	private_result := publish_package(project_dir, {
+		"manifest": private_manifest,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-api-123",
+		"registry_dir": registry_dir,
+		"visibility": "private"
+	})
+	assert_equal(private_result["ok"], true)
+
+	search_public := hosted_api_search_endpoint("api", {
+		"registry_dir": registry_dir,
+		"user": ""
+	})
+	assert_equal(search_public["ok"], true)
+	assert_equal(len(search_public["results"]), 1)
+	assert_equal(search_public["results"][0]["name"], "api-public")
+
+	search_owner := hosted_api_search_endpoint("api", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(search_owner["ok"], true)
+	assert_equal(len(search_owner["results"]), 2)
+
+	private_metadata_anon := hosted_api_package_metadata_endpoint("api-private", {
+		"registry_dir": registry_dir,
+		"user": ""
+	})
+	assert_equal(private_metadata_anon["ok"], false)
+	assert_true(index_of(to_string(private_metadata_anon["error"]), "requires owner access") >= 0)
+
+	private_metadata_owner := hosted_api_package_metadata_endpoint("api-private", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(private_metadata_owner["ok"], true)
+	assert_equal(private_metadata_owner["visibility"], "private")
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted registry resolver resolves public packages by latest and explicit version" {
+	project_dir := "/tmp/kennel-hosted-resolver-public"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	manifest_v1 := default_manifest("resolver-demo")
+	package_v1 := manifest_v1["package"]
+	package_v1["version"] := "1.0.0"
+	manifest_v1["package"] := package_v1
+
+	publish_v1 := publish_package(project_dir, {
+		"manifest": manifest_v1,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-resolver-123",
+		"registry_dir": registry_dir,
+		"visibility": "public",
+		"source": "github:kujolang/ai-sdk",
+		"ref": "v1.0.0"
+	})
+	assert_equal(publish_v1["ok"], true)
+
+	manifest_v2 := default_manifest("resolver-demo")
+	package_v2 := manifest_v2["package"]
+	package_v2["version"] := "1.1.0"
+	manifest_v2["package"] := package_v2
+
+	publish_v2 := publish_package(project_dir, {
+		"manifest": manifest_v2,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-resolver-123",
+		"registry_dir": registry_dir,
+		"visibility": "public",
+		"source": "github:kujolang/ai-sdk",
+		"ref": "v1.1.0"
+	})
+	assert_equal(publish_v2["ok"], true)
+
+	resolved_latest := resolve_hosted_registry_name("resolver-demo", {
+		"registry_dir": registry_dir
+	})
+	assert_equal(resolved_latest["ok"], true)
+	assert_equal(resolved_latest["version"], "1.1.0")
+	assert_equal(resolved_latest["source"], "github:kujolang/ai-sdk")
+	assert_equal(resolved_latest["ref"], "v1.1.0")
+	assert_equal(resolved_latest["visibility"], "public")
+
+	resolved_explicit := resolve_hosted_registry_name("resolver-demo", {
+		"registry_dir": registry_dir,
+		"version": "1.0.0"
+	})
+	assert_equal(resolved_explicit["ok"], true)
+	assert_equal(resolved_explicit["version"], "1.0.0")
+	assert_equal(resolved_explicit["ref"], "v1.0.0")
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted registry resolver enforces private package owner visibility" {
+	project_dir := "/tmp/kennel-hosted-resolver-private"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	private_manifest := default_manifest("resolver-private")
+	private_result := publish_package(project_dir, {
+		"manifest": private_manifest,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-private-resolver-123",
+		"registry_dir": registry_dir,
+		"visibility": "private",
+		"source": "github:kujolang/mcp",
+		"ref": "v0.1.0"
+	})
+	assert_equal(private_result["ok"], true)
+
+	anon_result := resolve_hosted_registry_name("resolver-private", {
+		"registry_dir": registry_dir,
+		"user": ""
+	})
+	assert_equal(anon_result["ok"], false)
+	assert_true(index_of(to_string(anon_result["error"]), "requires owner access") >= 0)
+
+	owner_result := resolve_hosted_registry_name("resolver-private", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(owner_result["ok"], true)
+	assert_equal(owner_result["visibility"], "private")
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted registry rejects invalid metadata_path values" {
+	project_dir := "/tmp/kennel-metadata-path-guardrails"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + registry_dir + "'")
+
+	write_file(registry_dir + "/index.json", to_json({
+		"schema_version": 1,
+		"generated_at": to_string(now()),
+		"packages": [
+			{
+				"name": "path-escape",
+				"latest": "1.0.0",
+				"metadata_path": "../outside.json",
+				"versions": [
+					{
+						"version": "1.0.0",
+						"source": "github:kujolang/kujo",
+						"ref": "main"
+					}
+				]
+			}
+		]
+	}), true)
+
+	metadata_lookup := hosted_api_package_metadata_endpoint("path-escape", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(metadata_lookup["ok"], false)
+	assert_true(index_of(to_string(metadata_lookup["error"]), "Invalid metadata_path") >= 0)
+
+	access_result := manage_package_access("path-escape", "list", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(access_result["ok"], false)
+	assert_true(index_of(to_string(access_result["error"]), "Invalid metadata_path") >= 0)
+
+	visibility_result := set_package_visibility("path-escape", "public", {
+		"registry_dir": registry_dir,
+		"user": "alice"
+	})
+	assert_equal(visibility_result["ok"], false)
+	assert_true(index_of(to_string(visibility_result["error"]), "Invalid metadata_path") >= 0)
+
+	yank_result := yank_package_version("path-escape", "1.0.0", {
+		"registry_dir": registry_dir,
+		"user": "alice",
+		"yank": true
+	})
+	assert_equal(yank_result["ok"], false)
+	assert_true(index_of(to_string(yank_result["error"]), "Invalid metadata_path") >= 0)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted publish rolls back index and metadata on paired-write failure" {
+	project_dir := "/tmp/kennel-paired-write-rollback"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + project_dir + "'")
+
+	initial_manifest := default_manifest("paired-write-demo")
+	initial_result := publish_package(project_dir, {
+		"manifest": initial_manifest,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-atomicity-123",
+		"registry_dir": registry_dir,
+		"visibility": "public"
+	})
+	assert_equal(initial_result["ok"], true)
+
+	index_path := registry_dir + "/index.json"
+	metadata_path := registry_dir + "/packages/paired-write-demo.json"
+	index_before := read_file(index_path)
+	metadata_before := read_file(metadata_path)
+
+	next_manifest := default_manifest("paired-write-demo")
+	next_package := next_manifest["package"]
+	next_package["version"] := "0.1.1"
+	next_manifest["package"] := next_package
+
+	failing_result := publish_package(project_dir, {
+		"manifest": next_manifest,
+		"registry": "hosted-registry",
+		"user": "alice",
+		"token": "token-atomicity-123",
+		"registry_dir": registry_dir,
+		"visibility": "public",
+		"test_fail_after_first_write": true
+	})
+	assert_equal(failing_result["ok"], false)
+	assert_true(index_of(to_string(failing_result["error"]), "Failed to persist paired registry state") >= 0)
+
+	assert_equal(read_file(index_path), index_before)
+	assert_equal(read_file(metadata_path), metadata_before)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}

@@ -1,0 +1,155 @@
+test_setup {
+	from cli import flag_value, has_flag, parse_cli, positional
+	from commands_shared import load_static_index, read_login_token_from_file
+	from dependency_spec import parse_source_reference
+	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version
+	from lockfile import empty_lockfile, set_packages
+	from manifest import default_manifest
+	from resolver import format_git_ls_remote_error, resolve_dependency
+	from utils import dict_get_or
+}
+
+test "registry index resolver maps package name using latest when explicit version not provided" {
+	index_doc := {
+		"packages": [
+			{
+				"name": "ai-sdk",
+				"latest": "v0.3.0",
+				"metadata_path": "packages/ai-sdk.json",
+				"versions": [
+					{"version": "v0.3.0", "source": "github:kujolang/ai-sdk", "ref": "v0.3.0", "checksum": "sha256:ai-sdk-v030"}
+				]
+			}
+		]
+	}
+	resolved := resolve_registry_index_name("ai-sdk", {"index": index_doc})
+	assert_equal(resolved["ok"], true)
+	assert_equal(resolved["version"], "v0.3.0")
+	assert_equal(resolved["source"], "github:kujolang/ai-sdk")
+	assert_equal(resolved["ref"], "v0.3.0")
+	assert_equal(resolved["checksum"], "sha256:ai-sdk-v030")
+}
+
+test "registry index resolver maps package name using explicit version override" {
+	index_doc := {
+		"packages": [
+			{
+				"name": "mcp",
+				"latest": "v0.2.0",
+				"metadata_path": "packages/mcp.json",
+				"versions": [
+					{"version": "v0.1.0", "source": "github:kujolang/mcp", "ref": "v0.1.0"},
+					{"version": "v0.2.0", "source": "github:kujolang/mcp", "ref": "v0.2.0"}
+				]
+			}
+		]
+	}
+	resolved := resolve_registry_index_name("mcp", {"index": index_doc, "version": "v0.1.0"})
+	assert_equal(resolved["ok"], true)
+	assert_equal(resolved["version"], "v0.1.0")
+	assert_equal(resolved["source"], "github:kujolang/mcp")
+	assert_equal(resolved["ref"], "v0.1.0")
+	assert_equal(resolved["checksum"], "")
+}
+
+test "registry index resolver returns actionable error when package is missing" {
+	index_doc := {
+		"packages": [
+			{
+				"name": "ai-sdk",
+				"latest": "v0.3.0",
+				"metadata_path": "packages/ai-sdk.json",
+				"versions": [
+					{"version": "v0.3.0", "source": "github:kujolang/ai-sdk", "ref": "v0.3.0"}
+				]
+			}
+		]
+	}
+	resolved := resolve_registry_index_name("missing-package", {"index": index_doc})
+	assert_equal(resolved["ok"], false)
+	assert_true(index_of(to_string(resolved["error"]), "was not found") >= 0)
+}
+
+test "registry index resolver returns actionable error when explicit version is missing" {
+	index_doc := {
+		"packages": [
+			{
+				"name": "mcp",
+				"latest": "v0.2.0",
+				"metadata_path": "packages/mcp.json",
+				"versions": [
+					{"version": "v0.2.0", "source": "github:kujolang/mcp", "ref": "v0.2.0"}
+				]
+			}
+		]
+	}
+	resolved := resolve_registry_index_name("mcp", {"index": index_doc, "version": "v9.9.9"})
+	assert_equal(resolved["ok"], false)
+	assert_true(index_of(to_string(resolved["error"]), "does not contain version") >= 0)
+}
+
+test "registry index resolver returns actionable error when version source or ref metadata is malformed" {
+	index_doc := {
+		"packages": [
+			{
+				"name": "broken",
+				"latest": "v1.0.0",
+				"metadata_path": "packages/broken.json",
+				"versions": [
+					{"version": "v1.0.0"}
+				]
+			}
+		]
+	}
+	resolved := resolve_registry_index_name("broken", {"index": index_doc})
+	assert_equal(resolved["ok"], false)
+	assert_true(index_of(to_string(resolved["error"]), "missing source/ref metadata") >= 0)
+}
+
+test "registry index search returns matching package names" {
+	index_doc := {
+		"packages": [
+			{
+				"name": "ai-sdk",
+				"latest": "v0.3.0",
+				"metadata_path": "packages/ai-sdk.json",
+				"versions": [
+					{"version": "v0.3.0", "source": "github:kujolang/ai-sdk", "ref": "v0.3.0"}
+				]
+			},
+			{
+				"name": "mcp",
+				"latest": "v0.1.0",
+				"metadata_path": "packages/mcp.json",
+				"versions": [
+					{"version": "v0.1.0", "source": "github:kujolang/mcp", "ref": "v0.1.0"}
+				]
+			}
+		]
+	}
+	search := search_registry_index("ai", {"index": index_doc})
+	assert_equal(search["ok"], true)
+	results := search["results"]
+	assert_equal(len(results), 1)
+	assert_equal(results[0]["name"], "ai-sdk")
+	assert_equal(results[0]["latest"], "v0.3.0")
+}
+
+test "registry index search returns actionable no-match error" {
+	index_doc := {
+		"packages": [
+			{
+				"name": "ai-sdk",
+				"latest": "v0.3.0",
+				"metadata_path": "packages/ai-sdk.json",
+				"versions": [
+					{"version": "v0.3.0", "source": "github:kujolang/ai-sdk", "ref": "v0.3.0"}
+				]
+			}
+		]
+	}
+	search := search_registry_index("missing", {"index": index_doc})
+	assert_equal(search["ok"], false)
+	assert_true(index_of(to_string(search["error"]), "No packages matched query") >= 0)
+}
+

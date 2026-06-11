@@ -1,0 +1,12 @@
+from src.commands_dependency import command_init, command_new, command_add, command_install, command_update, command_remove, command_list, command_info, command_search, command_validate
+
+export command_init := command_init
+export command_new := command_new
+export command_add := command_add
+export command_install := command_install
+export command_update := command_update
+export command_remove := command_remove
+export command_list := command_list
+export command_info := command_info
+export command_search := command_search
+export command_validate := command_validate

@@ -1,0 +1,23 @@
+{
+  "name": "ai-sdk",
+  "description": "Core AI SDK package for Kujo workflows.",
+  "homepage": "https://github.com/kujolang/ai-sdk",
+  "repository": "https://github.com/kujolang/ai-sdk",
+  "latest": "v0.3.0",
+  "versions": [
+    {
+      "version": "v0.3.0",
+      "source": "github:kujolang/ai-sdk",
+      "ref": "v0.3.0",
+      "checksum": "sha256:example-ai-sdk-v030",
+      "published_at": "2026-05-19T00:00:00Z"
+    },
+    {
+      "version": "v0.2.0",
+      "source": "github:kujolang/ai-sdk",
+      "ref": "v0.2.0",
+      "published_at": "2026-04-01T00:00:00Z",
+      "yanked": false
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+func error_result(message, context) {
+	normalized_context := context
+	if type(normalized_context) != "dict" {
+		normalized_context := {}
+	}
+	return {
+		"ok": false,
+		"error": to_string(message),
+		"context": normalized_context
+	}
+}
+
+export error_result := error_result

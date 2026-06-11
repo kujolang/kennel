@@ -1,0 +1,272 @@
+from path_helpers import parent_dir_path
+from src.utils import command_ok, dict_get_or, run_shell, shell_quote
+
+func default_token_store_path() {
+	home_dir := trim(to_string(env("HOME")))
+	if home_dir == "" {
+		home_dir = os_getcwd()
+	}
+	return home_dir + "/.kennel/tokens.json"
+}
+
+export func hosted_token_store_path(payload) {
+	default_path := default_token_store_path()
+	if type(payload) != "dict" {
+		return default_path
+	}
+	raw_path := trim(to_string(dict_get_or(payload, "store_path", "")))
+	if raw_path == "" {
+		return default_path
+	}
+	if starts_with(raw_path, "/") {
+		return raw_path
+	}
+	return os_getcwd() + "/" + raw_path
+}
+
+func empty_token_store() {
+	return {
+		"active_key": "",
+		"tokens": {}
+	}
+}
+
+func load_token_store(path_value) {
+	if file_exists(path_value) == false {
+		return {
+			"ok": true,
+			"store": empty_token_store()
+		}
+	}
+	raw := read_file(path_value)
+	try {
+		parsed := parse_json(raw)
+		if type(parsed) != "dict" {
+			return {
+				"ok": false,
+				"error": "Token store file must contain a JSON object: " + path_value
+			}
+		}
+		if has_key(parsed, "tokens") == false || type(parsed["tokens"]) != "dict" {
+			parsed["tokens"] := {}
+		}
+		if has_key(parsed, "active_key") == false {
+			parsed["active_key"] := ""
+		}
+		return {
+			"ok": true,
+			"store": parsed
+		}
+	} except err {
+		return {
+			"ok": false,
+			"error": "Invalid token store JSON: " + to_string(err)
+		}
+	}
+}
+
+func apply_restrictive_file_permissions(path_value) {
+	permission_result := run_shell("chmod 600 " + shell_quote(path_value))
+	if command_ok(permission_result) == false {
+		return {
+			"ok": false,
+			"error": "Failed to secure token store file permissions for " + path_value + ": " + trim(to_string(permission_result.stderr))
+		}
+	}
+	return {
+		"ok": true
+	}
+}
+
+func save_token_store(path_value, store_doc) {
+	parent_path := parent_dir_path(path_value)
+	mkdir_result := run_shell("mkdir -p " + shell_quote(parent_path))
+	if command_ok(mkdir_result) == false {
+		return {
+			"ok": false,
+			"error": "Failed to create token store directory: " + parent_path,
+			"path": path_value
+		}
+	}
+	try {
+		write_file(path_value, to_json(store_doc), true)
+	} except err {
+		return {
+			"ok": false,
+			"error": "Failed to write token store: " + to_string(err),
+			"path": path_value
+		}
+	}
+	hardened := apply_restrictive_file_permissions(path_value)
+	if hardened["ok"] == false {
+		return {
+			"ok": false,
+			"error": hardened["error"],
+			"path": path_value
+		}
+	}
+	return {
+		"ok": true,
+		"path": path_value
+	}
+}
+
+func token_key(registry_name, user_name) {
+	return trim(to_string(registry_name)) + "|" + trim(to_string(user_name))
+}
+
+export func hosted_auth_token_store(action, payload) {
+	store_path := hosted_token_store_path(payload)
+	loaded := load_token_store(store_path)
+	if loaded["ok"] == false {
+		return {
+			"ok": false,
+			"error": loaded["error"],
+			"action": action,
+			"payload": payload,
+			"store_path": store_path
+		}
+	}
+	store_doc := loaded["store"]
+	operation := to_lower(trim(to_string(action)))
+	if operation == "set" {
+		registry_name := trim(to_string(dict_get_or(payload, "registry", "default")))
+		if registry_name == "" {
+			registry_name := "default"
+		}
+		user_name := trim(to_string(dict_get_or(payload, "user", "default")))
+		if user_name == "" {
+			user_name := "default"
+		}
+		token_value := trim(to_string(dict_get_or(payload, "token", "")))
+		if token_value == "" {
+			return {
+				"ok": false,
+				"error": "Token value is required for auth token set action.",
+				"action": action,
+				"payload": payload,
+				"store_path": store_path
+			}
+		}
+		entry_key := token_key(registry_name, user_name)
+		store_tokens := dict_get_or(store_doc, "tokens", {})
+		store_tokens[entry_key] := {
+			"registry": registry_name,
+			"user": user_name,
+			"token": token_value
+		}
+		store_doc["tokens"] := store_tokens
+		store_doc["active_key"] := entry_key
+		saved := save_token_store(store_path, store_doc)
+		if saved["ok"] == false {
+			return {
+				"ok": false,
+				"error": dict_get_or(saved, "error", "Failed to write token store."),
+				"action": action,
+				"payload": payload,
+				"store_path": store_path
+			}
+		}
+		return {
+			"ok": true,
+			"action": "set",
+			"entry_key": entry_key,
+			"registry": registry_name,
+			"user": user_name,
+			"store_path": saved["path"]
+		}
+	}
+	if operation == "get" {
+		registry_name := trim(to_string(dict_get_or(payload, "registry", "")))
+		user_name := trim(to_string(dict_get_or(payload, "user", "")))
+		entry_key := ""
+		if registry_name != "" {
+			if user_name == "" {
+				user_name := "default"
+			}
+			entry_key := token_key(registry_name, user_name)
+		} else {
+			entry_key := trim(to_string(dict_get_or(store_doc, "active_key", "")))
+		}
+		if entry_key == "" || has_key(store_doc["tokens"], entry_key) == 0 {
+			return {
+				"ok": false,
+				"error": "No auth token is configured for the requested registry/user.",
+				"action": "get",
+				"store_path": store_path
+			}
+		}
+		entry := store_doc["tokens"][entry_key]
+		return {
+			"ok": true,
+			"action": "get",
+			"entry_key": entry_key,
+			"registry": dict_get_or(entry, "registry", ""),
+			"user": dict_get_or(entry, "user", ""),
+			"token": dict_get_or(entry, "token", ""),
+			"store_path": store_path
+		}
+	}
+	if operation == "clear" {
+		registry_name := trim(to_string(dict_get_or(payload, "registry", "")))
+		user_name := trim(to_string(dict_get_or(payload, "user", "")))
+		entry_key := ""
+		if registry_name != "" {
+			if user_name == "" {
+				user_name := "default"
+			}
+			entry_key := token_key(registry_name, user_name)
+		} else {
+			entry_key := trim(to_string(dict_get_or(store_doc, "active_key", "")))
+		}
+		if entry_key != "" && has_key(store_doc["tokens"], entry_key) == 1 {
+			store_tokens := dict_get_or(store_doc, "tokens", {})
+			store_tokens := remove(store_tokens, entry_key)
+			store_doc["tokens"] := store_tokens
+		}
+		if to_string(dict_get_or(store_doc, "active_key", "")) == entry_key {
+			store_doc["active_key"] := ""
+		}
+		saved := save_token_store(store_path, store_doc)
+		if saved["ok"] == false {
+			return {
+				"ok": false,
+				"error": dict_get_or(saved, "error", "Failed to write token store."),
+				"action": action,
+				"payload": payload,
+				"store_path": store_path
+			}
+		}
+		return {
+			"ok": true,
+			"action": "clear",
+			"entry_key": entry_key,
+			"store_path": saved["path"]
+		}
+	}
+	if operation == "list" {
+		entries := []
+		for key in keys(store_doc["tokens"]) {
+			entry := store_doc["tokens"][key]
+			entries := push(entries, {
+				"key": key,
+				"registry": dict_get_or(entry, "registry", ""),
+				"user": dict_get_or(entry, "user", ""),
+				"active": key == to_string(dict_get_or(store_doc, "active_key", ""))
+			})
+		}
+		return {
+			"ok": true,
+			"action": "list",
+			"entries": entries,
+			"store_path": store_path
+		}
+	}
+	return {
+		"ok": false,
+		"error": "Unsupported auth token action: " + operation,
+		"action": action,
+		"payload": payload,
+		"store_path": store_path
+	}
+}
