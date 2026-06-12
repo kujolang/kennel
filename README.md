@@ -202,6 +202,7 @@ Top-level runtime artifacts:
 - `kennel.toml`: manifest
 - `kennel.lock`: deterministic dependency snapshot
 - `kennel_packages/`: installed source trees
+- `AGENTS.md`: agent and contributor guidance for canonical examples, fixture boundaries, and search hygiene
 
 Implementation layout:
 

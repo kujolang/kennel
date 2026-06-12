@@ -21,10 +21,12 @@ Public package discovery, hosted registry features, package publishing, package 
 | Core package management | Available | `init`, `new`, `add`, `install`, `update`, `remove`, `list`, `info`, `validate` |
 | Deterministic locking | Available | `kennel.lock` generation and reinstall parity |
 | Local/source workflows | Available | `file:` and local-path dependency sources |
-| Static registry index workflows | Deferred | name-based add/search/info with configured registry index |
-| Hosted registry lifecycle | Deferred | login, publish, yank, access, visibility, api-search, api-metadata, install-hosted |
-| Access control enforcement | Deferred | owner checks for hosted mutation workflows |
+| Static registry index workflows | Available | name-based add/search/info with configured local/static registry indexes |
+| Hosted registry lifecycle | Available for local registry workflows | login, publish, yank, access, visibility, api-search, api-metadata, install-hosted |
+| Access control enforcement | Available for local hosted workflows | owner checks for hosted mutation workflows |
 | Trust policy enforcement | Available | checksum, signature, signing_key checks during add/install/update |
+| Transitive resolution | Available | deterministic graph install with conflict diagnostics |
+| Semver range resolution | Available (optional) | enable with `[policy.resolution].semver_ranges = true` |
 
 ## Recommended Usage Pattern
 
@@ -35,10 +37,10 @@ Public package discovery, hosted registry features, package publishing, package 
 
 ## Current Constraints
 
-- Direct dependencies only; no full transitive dependency solver yet.
-- No semver range solver yet.
 - No generic non-GitHub git or SSH source support yet.
 - Hosted downloads rely on metadata and trust-policy checks rather than binary provenance attestation.
+- Public package discovery, hosted publishing infrastructure, moderation, malware scanning, and trust scoring remain outside the launch-safe scope.
+- Semver range resolution is opt-in with `[policy.resolution].semver_ranges = true`.
 - No dedicated `version` flag yet; use `help` for CLI discovery.
 
 ## Canonical Validation Commands
