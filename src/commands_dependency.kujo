@@ -1,4 +1,4 @@
-from cli import flag_value, has_flag, positional
+from cli import flag_value, has_flag, positional, print_lines
 from commands_shared import capture_project_state, enforce_source_policy, ensure_project_manifest, find_entry_by_name, index_lookup_paths, load_registry_package_metadata, load_static_index, persist_project_state, print_supported_source_guidance, rebuild_lockfile_from_manifest, require_identifier, resolve_and_install_dependency, resolve_name_based_source, resolution_policy_from_manifest, source_policy_from_manifest, source_policy_with_cli_overrides, trust_policy_from_manifest, update_should_skip
 from dependency_spec import dependency_entry_from_source, parse_source_reference, source_ref_from_dependency_entry
 from future_resolvers import resolve_registry_index_name, search_registry_index, verify_package_signature
@@ -8,6 +8,10 @@ from manifest import default_manifest, dependency_exists, dependency_map, infer_
 from resolver import resolve_dependency
 from src.utils import dict_get_or
 from validator import print_validation_report, validate_manifest
+
+func install_line(name, install_path) {
+	return "Installed " + name + " into " + install_path
+}
 
 func command_init(cwd, parsed_cli) {
 	project_name := trim(to_string(flag_value(parsed_cli, "--name", "")))
@@ -23,8 +27,10 @@ func command_init(cwd, parsed_cli) {
 	}
 	manifest_obj := default_manifest(project_name)
 	save_manifest(cwd, manifest_obj)
-	print("Kennel initialized kennel.toml")
-	print("Kennel defaults are production-oriented: deterministic lockfiles, explicit sources, and trust policy support.")
+	print_lines([
+		"Kennel initialized kennel.toml",
+		"Kennel defaults are production-oriented: deterministic lockfiles, explicit sources, and trust policy support."
+	])
 }
 
 func command_new(cwd, parsed_cli) {
@@ -86,11 +92,13 @@ func command_new(cwd, parsed_cli) {
 	readme_md = readme_md + "```\n"
 	write_file(project_dir + "/README.md", readme_md, true)
 
-	print("Created Kujo project scaffold: " + project_dir)
-	print("Next steps:")
-	print("  cd " + project_name)
-	print("  kujo run src/main.kujo")
-	print("  kujo test")
+	print_lines([
+		"Created Kujo project scaffold: " + project_dir,
+		"Next steps:",
+		"  cd " + project_name,
+		"  kujo run src/main.kujo",
+		"  kujo test"
+	])
 }
 
 func command_add(cwd, parsed_cli) {
@@ -154,10 +162,12 @@ func command_add(cwd, parsed_cli) {
 		print(persisted["error"])
 		exit(1)
 	}
-	print("Added " + dep_name + " from " + source_value)
-	print("Resolved " + dep_name + " to commit " + dict_get_or(install["resolved"], "resolved_commit", ""))
-	print("Installed " + dep_name + " into " + install["install_path"])
-	print("Updated kennel.lock")
+	print_lines([
+		"Added " + dep_name + " from " + source_value,
+		"Resolved " + dep_name + " to commit " + dict_get_or(install["resolved"], "resolved_commit", ""),
+		install_line(dep_name, install["install_path"]),
+		"Updated kennel.lock"
+	])
 }
 
 func command_install(cwd, parsed_cli) {
@@ -191,20 +201,22 @@ func command_install(cwd, parsed_cli) {
 				print(verification["error"])
 				exit(1)
 			}
-			print("Installed " + entry["name"] + " into " + install_result["install_path"])
+			print(install_line(entry["name"], install_result["install_path"]))
 		}
 		print("Installed dependencies from kennel.lock")
 		return
 	}
 	rebuild := rebuild_lockfile_from_manifest(cwd, manifest_obj, trust_policy, {}, source_policy, resolution_policy)
 	if rebuild["ok"] == false {
-		print("Failed to resolve/install dependencies from manifest: " + rebuild["error"])
-		print("Run `kennel validate` to check dependency declarations, then re-run `kennel install`.")
+		print_lines([
+			"Failed to resolve/install dependencies from manifest: " + rebuild["error"],
+			"Run `kennel validate` to check dependency declarations, then re-run `kennel install`."
+		])
 		exit(1)
 	}
 	save_lockfile(cwd, rebuild["lockfile"])
 	for entry in rebuild["entries"] {
-		print("Installed " + entry["name"] + " into " + entry["install_path"])
+		print(install_line(entry["name"], entry["install_path"]))
 	}
 	print("Updated kennel.lock")
 }
@@ -303,8 +315,10 @@ func command_remove(cwd, parsed_cli) {
 			print("Warning: dependency metadata was removed, but install directory cleanup failed for " + package_path)
 		}
 	}
-	print("Removed dependency " + name)
-	print("Updated kennel.lock")
+	print_lines([
+		"Removed dependency " + name,
+		"Updated kennel.lock"
+	])
 }
 
 func command_list(cwd) {

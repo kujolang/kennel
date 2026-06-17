@@ -1,4 +1,4 @@
-from cli import flag_value, has_flag
+from cli import flag_value, has_flag, print_lines
 from dependency_spec import parse_source_reference, source_ref_from_dependency_entry
 from error_shape import error_result
 from future_resolvers import auth_token_store, resolve_registry_index_name, verify_package_signature
@@ -319,14 +319,16 @@ func resolve_registry_request_context(cwd, parsed_cli, require_auth) {
 }
 
 func print_supported_source_guidance() {
-	print("Supported sources:")
-	print("  github:owner/repo@ref")
-	print("  github:owner/repo")
-	print("  https://github.com/owner/repo.git#ref")
-	print("  file:../local-package or ../local-package")
-	print("Name-based add (requires static index configuration):")
-	print("  package-name")
-	print("Use `kennel help` for command usage details.")
+	print_lines([
+		"Supported sources:",
+		"  github:owner/repo@ref",
+		"  github:owner/repo",
+		"  https://github.com/owner/repo.git#ref",
+		"  file:../local-package or ../local-package",
+		"Name-based add (requires static index configuration):",
+		"  package-name",
+		"Use `kennel help` for command usage details."
+	])
 }
 
 func index_lookup_path(cwd, manifest_obj) {

@@ -1,9 +1,20 @@
-from cli import flag_value, has_flag, positional
+from cli import flag_value, has_flag, positional, print_lines
 from commands_shared import capture_project_state, ensure_project_manifest, persist_project_state, read_login_token_from_file, rebuild_lockfile_from_manifest, require_identifier, resolve_and_install_dependency, resolve_registry_request_context, resolution_policy_from_manifest, select_hosted_version_entry, source_policy_from_manifest, source_policy_with_cli_overrides, trust_policy_from_manifest
 from dependency_spec import dependency_entry_from_source, parse_source_reference
 from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, set_package_visibility, yank_package_version
 from manifest import set_dependency
 from src.utils import dict_get_or
+
+func print_login_required(context, action_text) {
+	print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before " + action_text + ".")
+}
+
+func print_registry_updates(result) {
+	print_lines([
+		"Updated registry index: " + to_string(dict_get_or(result, "index_path", "")),
+		"Updated package metadata: " + to_string(dict_get_or(result, "metadata_path", ""))
+	])
+}
 
 func command_login(cwd, parsed_cli) {
 	registry_name := trim(to_string(flag_value(parsed_cli, "--registry", "default")))
@@ -48,8 +59,10 @@ func command_login(cwd, parsed_cli) {
 		print(stored["error"])
 		exit(1)
 	}
-	print("Logged in to registry `" + registry_name + "` as `" + user_name + "`.")
-	print("Auth token stored at " + to_string(dict_get_or(stored, "store_path", "")))
+	print_lines([
+		"Logged in to registry `" + registry_name + "` as `" + user_name + "`.",
+		"Auth token stored at " + to_string(dict_get_or(stored, "store_path", ""))
+	])
 }
 
 func command_publish(cwd, parsed_cli) {
@@ -66,7 +79,7 @@ func command_publish(cwd, parsed_cli) {
 	context := resolve_registry_request_context(cwd, parsed_cli, true)
 	if context["ok"] == false {
 		print(context["error"])
-		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before publishing.")
+		print_login_required(context, "publishing")
 		exit(1)
 	}
 	requested_visibility := ""
@@ -96,8 +109,7 @@ func command_publish(cwd, parsed_cli) {
 		exit(1)
 	}
 	print("Published `" + package_name + "@" + package_version + "` to registry `" + context["registry"] + "`.")
-	print("Updated registry index: " + to_string(dict_get_or(publish_result, "index_path", "")))
-	print("Updated package metadata: " + to_string(dict_get_or(publish_result, "metadata_path", "")))
+	print_registry_updates(publish_result)
 	print("Visibility: " + to_string(dict_get_or(publish_result, "visibility", "public")))
 }
 
@@ -119,7 +131,7 @@ func command_yank(cwd, parsed_cli) {
 	context := resolve_registry_request_context(cwd, parsed_cli, true)
 	if context["ok"] == false {
 		print(context["error"])
-		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before yanking versions.")
+		print_login_required(context, "yanking versions")
 		exit(1)
 	}
 	do_yank := true
@@ -140,8 +152,7 @@ func command_yank(cwd, parsed_cli) {
 		action_label := "Unyanked"
 	}
 	print(action_label + " `" + package_name + "@" + target_version + "` in registry `" + context["registry"] + "`.")
-	print("Updated registry index: " + to_string(dict_get_or(yank_result, "index_path", "")))
-	print("Updated package metadata: " + to_string(dict_get_or(yank_result, "metadata_path", "")))
+	print_registry_updates(yank_result)
 }
 
 func command_access(cwd, parsed_cli) {
@@ -160,7 +171,7 @@ func command_access(cwd, parsed_cli) {
 	context := resolve_registry_request_context(cwd, parsed_cli, true)
 	if context["ok"] == false {
 		print(context["error"])
-		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before managing package access.")
+		print_login_required(context, "managing package access")
 		exit(1)
 	}
 	access_options := {
@@ -183,8 +194,10 @@ func command_access(cwd, parsed_cli) {
 		}))
 		return
 	}
-	print("Updated access for package `" + package_name + "` using action `" + action_name + "`.")
-	print("Package metadata: " + to_string(dict_get_or(access_result, "metadata_path", "")))
+	print_lines([
+		"Updated access for package `" + package_name + "` using action `" + action_name + "`.",
+		"Package metadata: " + to_string(dict_get_or(access_result, "metadata_path", ""))
+	])
 }
 
 func command_visibility(cwd, parsed_cli) {
@@ -198,7 +211,7 @@ func command_visibility(cwd, parsed_cli) {
 	context := resolve_registry_request_context(cwd, parsed_cli, true)
 	if context["ok"] == false {
 		print(context["error"])
-		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before changing package visibility.")
+		print_login_required(context, "changing package visibility")
 		exit(1)
 	}
 	visibility_result := set_package_visibility(package_name, visibility_name, {
@@ -210,8 +223,7 @@ func command_visibility(cwd, parsed_cli) {
 		exit(1)
 	}
 	print("Set visibility for package `" + package_name + "` to `" + visibility_name + "`.")
-	print("Updated registry index: " + to_string(dict_get_or(visibility_result, "index_path", "")))
-	print("Updated package metadata: " + to_string(dict_get_or(visibility_result, "metadata_path", "")))
+	print_registry_updates(visibility_result)
 }
 
 func command_api_search(cwd, parsed_cli) {
@@ -278,7 +290,7 @@ func command_install_hosted(cwd, parsed_cli) {
 	context := resolve_registry_request_context(cwd, parsed_cli, true)
 	if context["ok"] == false {
 		print(context["error"])
-		print("Run `kennel login --token TOKEN --registry " + context["registry"] + " --user " + context["user"] + "` before installing hosted packages.")
+		print_login_required(context, "installing hosted packages")
 		exit(1)
 	}
 	metadata_result := hosted_api_package_metadata_endpoint(package_name, {
@@ -341,8 +353,10 @@ func command_install_hosted(cwd, parsed_cli) {
 		exit(1)
 	}
 	resolved_version := selected_version["version"]
-	print("Installed hosted package `" + package_name + "@" + resolved_version + "` as `" + context["user"] + "` from registry `" + context["registry"] + "`.")
-	print("Updated kennel.lock")
+	print_lines([
+		"Installed hosted package `" + package_name + "@" + resolved_version + "` as `" + context["user"] + "` from registry `" + context["registry"] + "`.",
+		"Updated kennel.lock"
+	])
 }
 
 export command_login := command_login

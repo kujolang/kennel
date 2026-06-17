@@ -1,6 +1,12 @@
 from dependency_spec import source_ref_from_dependency_entry
 from manifest import dependency_map, manifest_package_name, manifest_package_version
 
+func print_issues(prefix, issues) {
+	for issue in issues {
+		print(prefix + issue)
+	}
+}
+
 func validate_manifest(manifest_obj) {
 	errors := []
 	warnings := []
@@ -39,12 +45,8 @@ func print_validation_report(report) {
 	} else {
 		print("kennel.toml has validation errors")
 	}
-	for issue in report["errors"] {
-		print("ERROR: " + issue)
-	}
-	for issue in report["warnings"] {
-		print("WARNING: " + issue)
-	}
+	print_issues("ERROR: ", report["errors"])
+	print_issues("WARNING: ", report["warnings"])
 }
 
 export validate_manifest := validate_manifest
