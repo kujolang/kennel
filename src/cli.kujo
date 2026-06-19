@@ -13,9 +13,11 @@ func parse_cli(argv) {
 	while i < len(argv) {
 		token := argv[i]
 		if starts_with(token, "--") {
-			if index_of(token, "=") >= 0 {
-				parts := split(token, "=")
-				flags[parts[0]] := parts[1]
+			eq_index := index_of(token, "=")
+			if eq_index >= 0 {
+				flag_name := substring(token, 0, eq_index)
+				flag_text := substring(token, eq_index + 1, len(token))
+				flags[flag_name] := flag_text
 				i := i + 1
 				continue
 			}

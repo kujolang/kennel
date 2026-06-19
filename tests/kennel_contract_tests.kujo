@@ -4,6 +4,7 @@ test_setup {
 	from commands_shared import load_static_index, read_login_token_from_file
 	from dependency_spec import parse_source_reference
 	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version
+	from installer import install_resolved
 	from lockfile import empty_lockfile, set_packages
 	from manifest import default_manifest
 	from resolver import format_git_ls_remote_error, resolve_dependency
@@ -64,6 +65,13 @@ test "parse_cli handles --flag=value syntax" {
 	assert_equal(flag_value(parsed, "--registry", ""), "hosted-registry")
 	assert_equal(flag_value(parsed, "--user", ""), "alice")
 	assert_equal(flag_value(parsed, "--store-path", ""), "/tmp/tokens.json")
+}
+
+test "parse_cli preserves equals signs inside --flag=value payloads" {
+	parsed := parse_cli(["login", "--token=abc==", "--registry=hosted=registry"])
+	assert_equal(parsed["command"], "login")
+	assert_equal(flag_value(parsed, "--token", ""), "abc==")
+	assert_equal(flag_value(parsed, "--registry", ""), "hosted=registry")
 }
 
 test "parse_cli boolean flags and helper accessors are stable" {
@@ -127,6 +135,31 @@ test "lockfile package ordering is deterministic by name" {
 	updated := set_packages(lock, entries)
 	assert_equal(updated["package"][0]["name"], "alpha")
 	assert_equal(updated["package"][1]["name"], "zeta")
+}
+
+test "installer rejects unsafe package install names before local copy" {
+	tmp_root := "/tmp/kennel-installer-unsafe-contract"
+	source_dir := tmp_root + "/source"
+	execute_status("rm -rf '" + tmp_root + "'")
+	execute_status("mkdir -p '" + source_dir + "'")
+	write_file(source_dir + "/kennel.toml", "[package]\nname = \"source\"\nversion = \"0.1.0\"\n", true)
+
+	result := install_resolved(tmp_root, {
+		"name": "../escape",
+		"kind": "path",
+		"source": "file:" + source_dir,
+		"requested": "",
+		"requested_kind": "none",
+		"resolved_ref": "local",
+		"resolved_commit": "",
+		"url": "",
+		"path": source_dir
+	})
+	assert_equal(result["ok"], false)
+	assert_true(index_of(to_string(result["error"]), "unsafe path") >= 0)
+	assert_equal(path_exists(tmp_root + "/escape"), false)
+
+	execute_status("rm -rf '" + tmp_root + "'")
 }
 
 test "resolve github ref to commit" {

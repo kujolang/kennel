@@ -40,7 +40,18 @@ func remove_path(path) {
 }
 
 func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
-	remove_path(install_path)
+	if is_safe_install_path(install_path) == false {
+		return {
+			"ok": false,
+			"error": "Refusing to install package into unsafe path: " + install_path
+		}
+	}
+	if remove_path(install_path) == false {
+		return {
+			"ok": false,
+			"error": "Failed to clear existing install directory: " + install_path
+		}
+	}
 	clone_cmd := "git clone " + shell_quote(url) + " " + shell_quote(install_path)
 	if resolved_ref != "" && resolved_ref != "HEAD" && resolved_commit == "" {
 		clone_cmd := "git clone --depth 1 --branch " + shell_quote(resolved_ref) + " " + shell_quote(url) + " " + shell_quote(install_path)
@@ -76,6 +87,12 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
 }
 
 func copy_local_package(path, install_path) {
+	if is_safe_install_path(install_path) == false {
+		return {
+			"ok": false,
+			"error": "Refusing to install package into unsafe path: " + install_path
+		}
+	}
 	if remove_path(install_path) == false {
 		return {
 			"ok": false,
