@@ -8,10 +8,10 @@ It is intentionally implementation-focused and organized by priority.
 
 ## Current Snapshot
 
-- Core CLI orchestration is concentrated in `kennel.kujo` (17 command handlers, ~1.3k lines).
-- Registry and trust flows are concentrated in `future_resolvers.kujo` (~1.6k lines).
+- Core CLI routing is thin and remains in `kennel.kujo`; command implementation now lives under `src/` with root compatibility shims.
+- Hosted auth and hosted trust checks have dedicated modules, while broader hosted registry metadata/API behavior still lives mostly in `src/future_resolvers.kujo`.
 - Contract coverage now runs through split suites in `tests/contracts/` via `scripts/verify-contract-suites.sh`.
-- Verification coverage is broad, but distributed across 24 shell scripts in `scripts/`.
+- Verification coverage is broad and profile-routed, but still distributed across many focused shell scripts in `scripts/`.
 
 ## Priority Backlog
 
@@ -29,8 +29,9 @@ It is intentionally implementation-focused and organized by priority.
 2. Remove shell-based destructive file operations from installer paths.
 
 - Evidence:
-	- `remove_path` calls `rm -rf` in `installer.kujo`.
-	- `copy_local_package` calls `cp -R` in `installer.kujo`.
+	- Installer cleanup uses shell `mv` into `.kennel_installer_trash`.
+	- Local copy fallback uses shell `tar`.
+	- Unsafe install names are now rejected before clone/copy, but the implementation still depends on guarded shell operations.
 - Outcome:
 	- Replace with safe Kujo-native file operations or strict guardrails.
 	- Explicit path safety checks for install targets.

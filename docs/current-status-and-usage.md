@@ -4,15 +4,17 @@
 
 Kennel is Kujo’s official package and project manager.
 
-The current launch-safe scope focuses on local and source-based package and project workflows:
+The current launch-safe scope focuses on local, source-based, static-index, and local hosted-registry package and project workflows:
 
 - deterministic install and lock workflows
 - local path and `file:` dependency sources
+- static registry indexes and deterministic mirror fallback
+- local hosted-registry artifacts for auth, publish, yank, access, visibility, search/metadata, and hosted install workflows
 - owner-enforced permissions for local workflow state
 - trust-policy enforcement on dependency consumption
 - repeatable validation gates for local/source package management
 
-Public package discovery, hosted registry features, package publishing, package directory browsing, accounts/auth, moderation, malware scanning, trust scoring, and package signing are intentionally deferred.
+Public package discovery, an operated hosted registry service, package directory browsing, hosted moderation, malware scanning, public trust scoring, and internet-scale registry operations are intentionally deferred.
 
 ## Capability Matrix
 
@@ -38,10 +40,11 @@ Public package discovery, hosted registry features, package publishing, package 
 ## Current Constraints
 
 - No generic non-GitHub git or SSH source support yet.
-- Hosted downloads rely on metadata and trust-policy checks rather than binary provenance attestation.
-- Public package discovery, hosted publishing infrastructure, moderation, malware scanning, and trust scoring remain outside the launch-safe scope.
+- Hosted downloads rely on metadata and trust-policy checks rather than full binary provenance enforcement.
+- Public package discovery, operated hosted publishing infrastructure, moderation, malware scanning, and trust scoring remain outside the launch-safe scope.
 - Semver range resolution is opt-in with `[policy.resolution].semver_ranges = true`.
 - No dedicated `version` flag yet; use `help` for CLI discovery.
+- Root-level `.kujo` modules are compatibility shims for the `src/` implementation modules and should remain until downstream imports have migrated.
 
 ## Canonical Validation Commands
 

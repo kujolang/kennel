@@ -1,8 +1,8 @@
 # Kennel
 
-Kennel is the official package and project manager for [Kujo](https://github.com/kujolang/kujo/). The current launch-safe scope focuses on local and source-based package/project workflows.
+Kennel is the official package and project manager for [Kujo](https://github.com/kujolang/kujo/). The current launch-safe scope focuses on deterministic local, source-based, static-index, and local hosted-registry package/project workflows.
 
-Public package discovery, hosted registry features, and package publishing are intentionally deferred until the security, trust, and moderation model is mature.
+Public package discovery, an operated hosted registry service, package directory browsing, hosted moderation, malware scanning, and public trust scoring are intentionally deferred until the security, trust, and moderation model is mature.
 
 ## Why Teams Use Kennel
 
@@ -15,8 +15,10 @@ Public package discovery, hosted registry features, and package publishing are i
 
 Current verified behaviors in this repository:
 
+- `--flag=value` parsing preserves complete values, including token-like values containing additional `=` characters
 - Lockfile output is deterministic and order-stable
 - Direct and transitive dependencies are installed and locked deterministically
+- Unsafe dependency install paths are rejected before local copy or git clone work starts
 - Pinned refs are protected during update operations
 - Token-store handling uses safer defaults and restrictive file permissions
 
@@ -56,8 +58,15 @@ Detailed security behavior and command mappings are in `docs/stage-3-security-mo
 | Trust policy checks | Available | `checksum`, `signature`, `signing_key` validations for local/source workflows |
 | Full transitive solver | Available | Deterministic graph install with conflict diagnostics for incompatible transitive specs |
 | Semver range solver | Available (optional) | Enable with `[policy.resolution].semver_ranges = true` for deterministic tag-based range selection |
-| Hosted registry lifecycle | Deferred | Auth, publish, access, visibility, search/metadata APIs, hosted install |
-| Multi-registry static index routing | Deferred | Configure `[registry].index` + `[registry].mirrors` for deterministic name-resolution fallback in `add`, `info`, and `search` |
+| Local hosted registry lifecycle | Available | Auth, publish, access, visibility, search/metadata APIs, and hosted install against local registry artifacts |
+| Multi-registry static index routing | Available | Configure `[registry].index` + `[registry].mirrors` for deterministic name-resolution fallback in `add`, `info`, and `search` |
+| Operated public registry service | Deferred | Public discovery, hosted moderation, malware scanning, trust scoring, and registry operations at internet scale |
+
+## Production Readiness Boundary
+
+Kennel is production-oriented for its current launch-safe scope: deterministic lockfiles, explicit source handling, local/static registry workflows, local hosted-registry artifacts, trust-policy checks, source-policy gates, and broad scripted validation.
+
+It should not yet be presented as a universal enterprise package ecosystem. The remaining enterprise-exemplar work is mostly around scale and operated-service readiness: bounded parallel install performance, stronger provenance around release artifacts and hosted downloads, migration/offline cache ergonomics, richer registry audit/export tooling, and clearer adoption funnels for new Kujo users. See `docs/KENNEL_ENTERPRISE_READINESS_REVIEW_2026_06_19.md` for the current review and next-session backlog.
 
 ## Quick Start
 
@@ -150,6 +159,7 @@ Script input convention:
 
 - `KUJO_BIN` is the shared Kujo binary override for verify scripts
 - Verify scripts default `KUJO_BIN` to `kujo` if not provided
+- If `kujo` is not on PATH locally, run with `KUJO_BIN=/path/to/kujo bash ./scripts/verify-all.sh core`
 
 Run core baseline gate:
 
@@ -207,7 +217,7 @@ Top-level runtime artifacts:
 Implementation layout:
 
 - Core implementation modules live under `src/`
-- Root-level module files are compatibility shims re-exporting `src` modules
+- Root-level module files are intentional compatibility shims re-exporting `src` modules; keep them until downstream imports no longer rely on root module names
 - Shared utility logic is implemented in `src/utils.kujo`; root `utils.kujo` is a compatibility shim
 - Entrypoint remains `kennel.kujo`
 - Shim consistency is enforced by `scripts/verify-kujo-native-direction.sh`
