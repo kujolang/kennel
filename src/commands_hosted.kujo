@@ -160,7 +160,9 @@ func command_access(cwd, parsed_cli) {
 	package_name := trim(to_string(positional(parsed_cli, 1, "")))
 	target_name := trim(to_string(positional(parsed_cli, 2, "")))
 	if action_name == "" || package_name == "" {
-		print("Usage: kennel access <owner-add|owner-remove|team-add|team-remove|list> <package> [target] [--role ROLE] [--permission NAME] [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH]")
+		usage := "Usage: kennel access <owner-add|owner-remove|team-add|team-remove|list> <package> [target]"
+		usage = usage + " [--role ROLE] [--permission NAME] [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH]"
+		print(usage)
 		exit(1)
 	}
 	action_name = require_identifier(action_name, "Access action")
@@ -187,11 +189,12 @@ func command_access(cwd, parsed_cli) {
 		exit(1)
 	}
 	if action_name == "list" {
-		print(to_json({
+		payload := {
 			"package": package_name,
 			"owners": dict_get_or(access_result, "owners", []),
 			"teams": dict_get_or(access_result, "teams", [])
-		}))
+		}
+		print(to_json(payload))
 		return
 	}
 	print_lines([
@@ -248,7 +251,9 @@ func command_api_search(cwd, parsed_cli) {
 	results := dict_get_or(api_result, "results", [])
 	print("Hosted API search results for `" + query + "`:")
 	for entry in results {
-		print(to_string(dict_get_or(entry, "name", "")) + " | " + to_string(dict_get_or(entry, "latest", "")) + " | " + to_string(dict_get_or(entry, "visibility", "public")))
+		line := to_string(dict_get_or(entry, "name", "")) + " | " + to_string(dict_get_or(entry, "latest", ""))
+		line = line + " | " + to_string(dict_get_or(entry, "visibility", "public"))
+		print(line)
 	}
 }
 

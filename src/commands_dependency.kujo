@@ -448,7 +448,9 @@ func command_search(cwd, parsed_cli) {
 	}
 	print("Search results for `" + query + "` across configured static indexes")
 	for entry in combined_results {
-		print(to_string(dict_get_or(entry, "name", "")) + " | " + to_string(dict_get_or(entry, "latest", "")) + " | " + to_string(dict_get_or(entry, "metadata_path", "")) + " | " + to_string(dict_get_or(entry, "index_path", "")))
+		line := to_string(dict_get_or(entry, "name", "")) + " | " + to_string(dict_get_or(entry, "latest", ""))
+		line = line + " | " + to_string(dict_get_or(entry, "metadata_path", "")) + " | " + to_string(dict_get_or(entry, "index_path", ""))
+		print(line)
 	}
 }
 
