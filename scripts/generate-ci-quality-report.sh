@@ -19,7 +19,7 @@ fi
 
 mkdir -p "$(dirname "$OUTPUT_FILE")"
 
-warning_count="$(grep -Ec 'RUFRUN001|Type checking warnings' "$LOG_FILE" || true)"
+warning_count="$(grep -Ec 'KUJORUN001|Type checking warnings' "$LOG_FILE" || true)"
 verify_success_count="$(grep -Ec '\[verify-[^]]+\] success' "$LOG_FILE" || true)"
 verify_failure_count="$(grep -Ec '\[verify-[^]]+\] (failed|failure)' "$LOG_FILE" || true)"
 

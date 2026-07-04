@@ -1,792 +1,792 @@
 Type checking warnings:
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_true'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called
 
-  [RUFRUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
+  [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_equal'
   --> 0:0
    = note: Function must be defined before it is called

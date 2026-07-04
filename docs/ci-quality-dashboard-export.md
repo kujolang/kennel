@@ -24,7 +24,7 @@ The exported JSON report includes:
 
 - current run conclusion (`success`/`failure`)
 - current run duration in seconds
-- warning counts (`RUFRUN001` or type-warning marker lines)
+- warning counts (`KUJORUN001` or type-warning marker lines)
 - verify success/failure marker counts
 - trend summary from recent workflow runs (pass/fail counts and duration stats)
 - privacy metadata confirming no raw logs or secret tokens are included
