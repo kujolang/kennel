@@ -1,5 +1,9 @@
 # Kennel
 
+[![Version](https://img.shields.io/badge/version-1.0.0-black)](https://github.com/kujolang/kennel)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+[![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
+
 Kennel is the official package and project manager for [Kujo](https://github.com/kujolang/kujo/). The current launch-safe scope focuses on deterministic local, source-based, static-index, and local hosted-registry package/project workflows.
 
 Public package discovery, an operated hosted registry service, package directory browsing, hosted moderation, malware scanning, and public trust scoring are intentionally deferred until the security, trust, and moderation model is mature.
