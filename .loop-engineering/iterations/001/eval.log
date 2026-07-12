@@ -1,7 +1,24 @@
 
 ## gate: source_checks
-$ for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check \"$f\" >/dev/null || exit 1; done
-[KUJOCLI001] [cli] error: Failed to read .kujo file '"kennel.kujo"': No such file or directory (os error 2)
+$ for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check $f >/dev/null || exit 1; done
+Compiler optimization: 0 constants folded, 41 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 10 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 17 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 2 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 115 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 45 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 1 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 325 dead instructions removed, 1 peephole optimizations
+Compiler optimization: 0 constants folded, 46 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 37 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 48 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 19 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 23 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 5 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 2 constants folded, 114 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 1 constants folded, 77 dead instructions removed, 0 peephole optimizations
+Compiler optimization: 0 constants folded, 1 dead instructions removed, 0 peephole optimizations
+gate source_checks: pass
 
 ## gate: contract_tests
 $ KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo run tests/kennel_contract_tests.kujo --interpreter
@@ -832,4 +849,5 @@ gate cli_smoke: pass
 
 ## gate: diff_check
 $ git diff --check
-gate diff_check: pass
+.loop-engineering/iterations/001/diff.patch:7: trailing whitespace.
++ 
