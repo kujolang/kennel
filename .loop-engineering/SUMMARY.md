@@ -2,30 +2,30 @@
 
 ## Verdict
 
-not-run
+blocked
 
 ## Completed
 
-- none
+- configured loop run completed through iteration 3
 
 ## Verification
 
-- passed: none
+- passed: contract_tests, cli_smoke, diff_check, contract_tests, cli_smoke, diff_check, contract_tests, cli_smoke, diff_check
 - blocked: none
-- failed: none
+- failed: source_checks, source_checks, source_checks
 
 ## Commits
 
-- none
+- Loop engineering: Evaluate HLP-004 migration to the first-party CLI parser package while preserving Kennel package/dependency policy semantics.
 
 ## Remaining
 
-- configure objective/checklist_file in loop.yml
+- none
 
 ## External Blockers
 
-- none
+- kujo-cli-module-distribution: Publish/install the first-party CLI module or add a supported module search path/package dependency, then migrate parser call sites and add parser parity tests.
 
 ## Next Start
 
-- scripts/run-workflow.sh --config .loop-engineering/loop.yml
+- repeated-failure: required gate failed 3 times
