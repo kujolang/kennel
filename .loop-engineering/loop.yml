@@ -17,7 +17,7 @@ blocked_actions:
 
 eval_gates:
   - id: source_checks
-    command: "for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check \"$f\" >/dev/null || exit 1; done"
+    command: "for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check $f >/dev/null || exit 1; done"
   - id: contract_tests
     command: "KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo run tests/kennel_contract_tests.kujo --interpreter"
   - id: cli_smoke
