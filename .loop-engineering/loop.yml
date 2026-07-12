@@ -16,38 +16,12 @@ blocked_actions:
   - production_config_change
 
 eval_gates:
-  - id: php_tests
-    command: "cd connector-plugin && composer test"
-    required: true
-    when_files_match:
-      - "connector-plugin/**"
-
-  - id: node_install
-    command: "pnpm install --frozen-lockfile"
-    required: true
-    when_files_match:
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "src/**"
-
-  - id: node_tests
-    command: "pnpm test"
-    required: true
-    when_files_match:
-      - "src/**"
-
-  - id: typecheck
-    command: "pnpm run typecheck"
-    required: true
-    when_files_match:
-      - "src/**"
-
-  - id: build
-    command: "pnpm run build"
-    required: true
-    when_files_match:
-      - "src/**"
-
+  - id: source_checks
+    command: "for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check \"$f\" >/dev/null || exit 1; done"
+  - id: contract_tests
+    command: "KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo run tests/kennel_contract_tests.kujo --interpreter"
+  - id: cli_smoke
+    command: "KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo bash scripts/verify-cli-messages.sh"
   - id: diff_check
     command: "git diff --check"
     required: true
