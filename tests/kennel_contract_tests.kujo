@@ -1,5 +1,5 @@
 test_setup {
-	from cli import flag_value, has_flag, parse_cli, positional
+	from src.cli_adapter import flag_value, has_flag, parse_cli, positional
 	from commands_dependency import command_new
 	from commands_shared import load_static_index, read_login_token_from_file
 	from dependency_spec import parse_source_reference

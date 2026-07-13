@@ -1,4 +1,4 @@
-from cli import flag_value, has_flag, positional, print_lines
+from src.cli_adapter import flag_value, has_flag, positional, print_lines
 from commands_shared import capture_project_state, ensure_project_manifest, persist_project_state, read_login_token_from_file, rebuild_lockfile_from_manifest, require_identifier, resolve_and_install_dependency, resolve_registry_request_context, resolution_policy_from_manifest, select_hosted_version_entry, source_policy_from_manifest, source_policy_with_cli_overrides, trust_policy_from_manifest
 from dependency_spec import dependency_entry_from_source, parse_source_reference
 from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, set_package_visibility, yank_package_version

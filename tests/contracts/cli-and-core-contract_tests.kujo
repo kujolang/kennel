@@ -1,5 +1,5 @@
 test_setup {
-	from cli import flag_value, has_flag, parse_cli, positional
+	from src.cli_adapter import flag_value, has_flag, parse_cli, positional
 	from commands_shared import enforce_source_policy, load_static_index, read_login_token_from_file, source_policy_from_manifest, source_policy_with_cli_overrides
 	from dependency_spec import parse_source_reference
 	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version

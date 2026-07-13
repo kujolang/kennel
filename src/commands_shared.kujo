@@ -1,4 +1,4 @@
-from cli import flag_value, has_flag, print_lines
+from src.cli_adapter import flag_value, has_flag, print_lines
 from dependency_spec import parse_source_reference, source_ref_from_dependency_entry
 from error_shape import error_result
 from future_resolvers import auth_token_store, resolve_registry_index_name, verify_package_signature
