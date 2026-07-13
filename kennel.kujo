@@ -1,4 +1,4 @@
-from cli import flag_value, parse_cli, print_help
+from src.cli import flag_value, parse_cli, print_help
 from commands_dependency import command_add, command_info, command_init, command_new, command_install, command_list, command_remove, command_search, command_update, command_validate
 from commands_hosted import command_access, command_api_metadata, command_api_search, command_install_hosted, command_login, command_publish, command_visibility, command_yank
 

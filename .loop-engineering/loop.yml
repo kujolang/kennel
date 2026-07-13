@@ -17,11 +17,11 @@ blocked_actions:
 
 eval_gates:
   - id: source_checks
-    command: "for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check $f >/dev/null || exit 1; done"
+    command: "export KUJO_MODULE_PATH=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/modules; for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check $f >/dev/null || exit 1; done"
   - id: contract_tests
-    command: "KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo run tests/kennel_contract_tests.kujo --interpreter"
+    command: "KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo KUJO_MODULE_PATH=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/modules /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo run tests/kennel_contract_tests.kujo --interpreter"
   - id: cli_smoke
-    command: "KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo bash scripts/verify-cli-messages.sh"
+    command: "KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo KUJO_MODULE_PATH=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/modules bash scripts/verify-cli-messages.sh"
   - id: diff_check
     command: 'files=$(git diff --name-only | grep -v "^.loop-engineering/" || true); if [ -n "$files" ]; then git diff --check -- $files; fi'
     required: true

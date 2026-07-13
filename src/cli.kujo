@@ -1,69 +1,10 @@
-func parse_cli(argv) {
-	if len(argv) == 0 {
-		return {
-			"command": "help",
-			"positionals": [],
-			"flags": {}
-		}
-	}
-	command := argv[0]
-	positionals := []
-	flags := {}
-	i := 1
-	while i < len(argv) {
-		token := argv[i]
-		if starts_with(token, "--") {
-			eq_index := index_of(token, "=")
-			if eq_index >= 0 {
-				flag_name := substring(token, 0, eq_index)
-				flag_text := substring(token, eq_index + 1, len(token))
-				flags[flag_name] := flag_text
-				i := i + 1
-				continue
-			}
-			if i + 1 < len(argv) && starts_with(argv[i + 1], "--") == false {
-				flags[token] := argv[i + 1]
-				i := i + 2
-				continue
-			}
-			flags[token] := true
-			i := i + 1
-			continue
-		}
-		positionals := push(positionals, token)
-		i := i + 1
-	}
-	return {
-		"command": command,
-		"positionals": positionals,
-		"flags": flags
-	}
-}
+from cli import parse_cli, has_flag, flag_value, positional, print_lines
 
-func has_flag(parsed_cli, flag_name) {
-	return has_key(parsed_cli["flags"], flag_name)
-}
-
-func flag_value(parsed_cli, flag_name, fallback) {
-	if has_key(parsed_cli["flags"], flag_name) {
-		return parsed_cli["flags"][flag_name]
-	}
-	return fallback
-}
-
-func positional(parsed_cli, index, fallback) {
-	values := parsed_cli["positionals"]
-	if index >= 0 && index < len(values) {
-		return values[index]
-	}
-	return fallback
-}
-
-func print_lines(lines) {
-	for line in lines {
-		print(line)
-	}
-}
+export parse_cli := parse_cli
+export has_flag := has_flag
+export flag_value := flag_value
+export positional := positional
+export print_lines := print_lines
 
 func print_help() {
 	print_lines([
@@ -118,9 +59,4 @@ func print_help() {
 	])
 }
 
-export parse_cli := parse_cli
-export has_flag := has_flag
-export flag_value := flag_value
-export positional := positional
-export print_lines := print_lines
 export print_help := print_help

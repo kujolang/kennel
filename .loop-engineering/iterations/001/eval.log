@@ -1,8 +1,7 @@
 
 ## gate: source_checks
-$ for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check $f >/dev/null || exit 1; done
+$ export KUJO_MODULE_PATH=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/modules; for f in kennel.kujo src/*.kujo tests/*.kujo; do /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo check $f >/dev/null || exit 1; done
 Compiler optimization: 0 constants folded, 41 dead instructions removed, 0 peephole optimizations
-Compiler optimization: 0 constants folded, 10 dead instructions removed, 0 peephole optimizations
 Compiler optimization: 0 constants folded, 17 dead instructions removed, 0 peephole optimizations
 Compiler optimization: 0 constants folded, 2 dead instructions removed, 0 peephole optimizations
 Compiler optimization: 0 constants folded, 115 dead instructions removed, 0 peephole optimizations
@@ -21,7 +20,7 @@ Compiler optimization: 0 constants folded, 1 dead instructions removed, 0 peepho
 gate source_checks: pass
 
 ## gate: contract_tests
-$ KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo run tests/kennel_contract_tests.kujo --interpreter
+$ KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo KUJO_MODULE_PATH=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/modules /Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo run tests/kennel_contract_tests.kujo --interpreter
 Type checking warnings:
   [KUJORUN001] [runtime] Undefined Function: Undefined function 'assert_true'
   --> 0:0
@@ -843,7 +842,7 @@ Type checking warnings:
 gate contract_tests: pass
 
 ## gate: cli_smoke
-$ KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo bash scripts/verify-cli-messages.sh
+$ KUJO_BIN=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/debug/kujo KUJO_MODULE_PATH=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/modules bash scripts/verify-cli-messages.sh
 [verify-cli-messages] success
 gate cli_smoke: pass
 
