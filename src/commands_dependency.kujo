@@ -1,4 +1,4 @@
-from cli import flag_value, has_flag, positional, print_lines
+from src.cli_adapter import flag_value, has_flag, positional, print_lines
 from commands_shared import capture_project_state, enforce_source_policy, ensure_project_manifest, find_entry_by_name, index_lookup_paths, load_registry_package_metadata, load_static_index, persist_project_state, print_supported_source_guidance, rebuild_lockfile_from_manifest, require_identifier, resolve_and_install_dependency, resolve_name_based_source, resolution_policy_from_manifest, source_policy_from_manifest, source_policy_with_cli_overrides, trust_policy_from_manifest, update_should_skip
 from dependency_spec import dependency_entry_from_source, parse_source_reference, source_ref_from_dependency_entry
 from future_resolvers import resolve_registry_index_name, search_registry_index, verify_package_signature
