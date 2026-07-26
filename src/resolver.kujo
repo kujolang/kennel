@@ -268,7 +268,7 @@ func format_git_ls_remote_error(url, selector, stderr_text) {
 	if stderr_value == "" {
 		return "Failed to resolve ref `" + selector + "` from " + url + ". Git returned no stderr output. Verify network access and repository visibility."
 	}
-	if index_of(stderr_value, "Repository not found") >= 0 || index_of(stderr_value, "repository not found") >= 0 {
+	if index_of(stderr_value, "Repository not found") >= 0 || index_of(stderr_value, "repository not found") >= 0 || index_of(stderr_value, "could not read Username for 'https://github.com'") >= 0 {
 		return "Failed to resolve ref `" + selector + "` from " + url + ". Repository not found. Verify owner/repo and repository visibility (public/private access)."
 	}
 	return "Failed to resolve ref `" + selector + "` from " + url + ". " + stderr_value + " Verify that the repository is reachable and that the requested ref exists."

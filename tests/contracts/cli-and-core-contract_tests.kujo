@@ -222,6 +222,12 @@ test "resolver diagnostics identify repository-not-found" {
 	assert_true(index_of(message, "Verify owner/repo") >= 0)
 }
 
+test "resolver diagnostics identify noninteractive github auth prompt as repository access" {
+	message := format_git_ls_remote_error("https://github.com/example/missing.git", "main", "fatal: could not read Username for 'https://github.com': No such device or address")
+	assert_true(index_of(message, "Repository not found") >= 0)
+	assert_true(index_of(message, "Verify owner/repo") >= 0)
+}
+
 test "resolver diagnostics include ref guidance for generic failures" {
 	message := format_git_ls_remote_error("https://github.com/example/repo.git", "missing-ref", "fatal: unable to access")
 	assert_true(index_of(message, "Failed to resolve ref `missing-ref`") >= 0)
