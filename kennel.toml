@@ -1,6 +1,6 @@
 [package]
 name = "kennel"
-version = "0.1.0"
+version = "1.0.0"
 description = "Production-focused package manager for Kujo projects with deterministic dependency operations and hosted-registry workflows."
 license = "MIT"
 authors = ["Kujolang <contact@kujolang.ai>"]
@@ -12,10 +12,10 @@ categories = ["developer-tools"]
 readme = "README.md"
 
 [package.status]
-stage = "experimental"
-stability = "early"
+stage = "production"
+stability = "stable"
 public_api = true
-notes = "Core workflows are production-focused; compatibility and policy surfaces continue to evolve."
+notes = "Stable for the documented local, source, static-index, and local hosted-registry workflows; operated public-registry services remain out of scope."
 
 [kujo]
 minimum_version = "0.1.0"
