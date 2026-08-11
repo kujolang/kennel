@@ -1,6 +1,6 @@
 test_setup {
 	from src.cli_adapter import flag_value, has_flag, parse_cli, positional
-	from commands_shared import load_static_index, read_login_token_from_file
+	from commands_shared import load_static_index, read_login_token_from_file, select_hosted_version_entry
 	from dependency_spec import parse_source_reference
 	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_hosted_registry_name, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version
 	from lockfile import empty_lockfile, set_packages
@@ -65,6 +65,104 @@ test "hosted auth token store uses stable default path instead of cwd token file
 	assert_equal(cwd_result.success, true)
 	cwd_path := trim(to_string(cwd_result.stdout))
 	assert_true(resolved_default != cwd_path + "/.kennel_tokens.json")
+}
+
+test "hosted auth token store rejects corrupted empty token entries" {
+	store_path := "/tmp/kennel-auth-empty-token-test.json"
+	write_file(store_path, to_json({
+		"active_key": "local-hosted|alice",
+		"tokens": {
+			"local-hosted|alice": {
+				"registry": "local-hosted",
+				"user": "alice",
+				"token": ""
+			}
+		}
+	}), true)
+
+	get_result := auth_token_store("get", {
+		"store_path": store_path,
+		"registry": "local-hosted",
+		"user": "alice"
+	})
+	assert_equal(get_result["ok"], false)
+	assert_true(index_of(to_string(get_result["error"]), "empty") >= 0)
+
+	execute_status("rm -f '" + store_path + "'")
+}
+
+test "hosted owner authorization is role-aware and fails closed without owners" {
+	project_dir := "/tmp/kennel-owner-authorization-contract"
+	registry_dir := project_dir + "/registry"
+	execute_status("rm -rf '" + project_dir + "'")
+	execute_status("mkdir -p '" + registry_dir + "/packages'")
+
+	index_doc := {
+		"schema_version": 1,
+		"packages": [{
+			"name": "role-demo",
+			"latest": "1.0.0",
+			"metadata_path": "packages/role-demo.json",
+			"versions": [{"version": "1.0.0", "source": "github:kujolang/kujo", "ref": "v1.0.0"}]
+		}]
+	}
+	write_file(registry_dir + "/index.json", to_json(index_doc), true)
+	write_file(registry_dir + "/packages/role-demo.json", to_json({
+		"name": "role-demo",
+		"latest": "1.0.0",
+		"visibility": "public",
+		"access": {
+			"owners": [{"user": "alice", "role": "owner"}, {"user": "bob", "role": "maintainer"}],
+			"teams": []
+		},
+		"versions": [{"version": "1.0.0", "source": "github:kujolang/kujo", "ref": "v1.0.0"}]
+	}), true)
+
+	maintainer_attempt := manage_package_access("role-demo", "owner-add", {
+		"registry_dir": registry_dir,
+		"user": "bob",
+		"target": "eve",
+		"role": "owner"
+	})
+	assert_equal(maintainer_attempt["ok"], false)
+
+	write_file(registry_dir + "/packages/role-demo.json", to_json({
+		"name": "role-demo",
+		"latest": "1.0.0",
+		"visibility": "public",
+		"access": {"owners": [], "teams": []},
+		"versions": [{"version": "1.0.0", "source": "github:kujolang/kujo", "ref": "v1.0.0"}]
+	}), true)
+	ownerless_attempt := manage_package_access("role-demo", "owner-add", {
+		"registry_dir": registry_dir,
+		"user": "mallory",
+		"target": "mallory",
+		"role": "owner"
+	})
+	assert_equal(ownerless_attempt["ok"], false)
+
+	execute_status("rm -rf '" + project_dir + "'")
+}
+
+test "hosted version selection never returns a yanked release" {
+	metadata := {
+		"latest": "2.0.0",
+		"versions": [
+			{"version": "0.5.0", "yanked": false},
+			{"version": "1.0.0", "yanked": false},
+			{"version": "2.0.0", "yanked": true}
+		]
+	}
+	selected := select_hosted_version_entry(metadata, "demo")
+	assert_equal(selected["ok"], true)
+	assert_equal(selected["version"], "1.0.0")
+
+	all_yanked := select_hosted_version_entry({
+		"latest": "2.0.0",
+		"versions": [{"version": "2.0.0", "yanked": true}]
+	}, "demo")
+	assert_equal(all_yanked["ok"], false)
+	assert_true(index_of(to_string(all_yanked["error"]), "unyanked") >= 0)
 }
 
 test "hosted publish writes index and package metadata artifacts" {

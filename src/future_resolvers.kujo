@@ -393,10 +393,11 @@ func is_package_owner(metadata_doc, user_name) {
 	}
 	owners := owner_entries(metadata_doc)
 	if len(owners) == 0 {
-		return true
+		return false
 	}
 	for owner_entry in owners {
-		if to_string(dict_get_or(owner_entry, "user", "")) == resolved_user {
+		owner_role := to_lower(trim(to_string(dict_get_or(owner_entry, "role", "owner"))))
+		if to_string(dict_get_or(owner_entry, "user", "")) == resolved_user && owner_role == "owner" {
 			return true
 		}
 	}
@@ -564,6 +565,14 @@ export func resolve_registry_index_name(package_name, constraints) {
 		}
 	}
 	version_entry := version_lookup["version"]
+	if dict_get_or(version_entry, "yanked", false) == true {
+		return {
+			"ok": false,
+			"error": "Package `" + package_name + "` version `" + resolved_version + "` is yanked and cannot be resolved.",
+			"package": package_name,
+			"constraints": constraints
+		}
+	}
 	source_value := trim(to_string(dict_get_or(version_entry, "source", "")))
 	ref_value := trim(to_string(dict_get_or(version_entry, "ref", "")))
 	if source_value == "" || ref_value == "" {
@@ -752,6 +761,14 @@ export func resolve_hosted_registry_name(package_name, constraints) {
 		}
 	}
 	version_entry := version_lookup["version"]
+	if dict_get_or(version_entry, "yanked", false) == true {
+		return {
+			"ok": false,
+			"error": "Package `" + resolved_package + "` version `" + resolved_version + "` is yanked and cannot be resolved.",
+			"package": resolved_package,
+			"constraints": constraints
+		}
+	}
 	source_value := trim(to_string(dict_get_or(version_entry, "source", "")))
 	ref_value := trim(to_string(dict_get_or(version_entry, "ref", "")))
 	if source_value == "" || ref_value == "" {
@@ -953,7 +970,11 @@ export func publish_package(package_path, publish_options) {
 			"metadata_path": metadata_path
 		}
 	}
-	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], user_name)
+	initial_owner := ""
+	if metadata_exists == false {
+		initial_owner = user_name
+	}
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], initial_owner)
 	if metadata_exists && is_package_owner(metadata_doc, user_name) == false {
 		return {
 			"ok": false,
@@ -1196,7 +1217,7 @@ export func manage_package_access(package_name, access_action, access_options) {
 			"metadata_path": metadata_path
 		}
 	}
-	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], fallback_owner)
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], "")
 	if is_package_owner(metadata_doc, fallback_owner) == false {
 		return {
 			"ok": false,
@@ -1471,7 +1492,7 @@ export func set_package_visibility(package_name, visibility_name, visibility_opt
 			"metadata_path": metadata_path
 		}
 	}
-	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], user_name)
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], "")
 	if is_package_owner(metadata_doc, user_name) == false {
 		return {
 			"ok": false,
@@ -1831,7 +1852,7 @@ export func yank_package_version(package_name, version_name, yank_options) {
 			"metadata_path": metadata_path
 		}
 	}
-	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], user_name)
+	metadata_doc := ensure_access_metadata(loaded_metadata["metadata"], "")
 	if is_package_owner(metadata_doc, user_name) == false {
 		return {
 			"ok": false,

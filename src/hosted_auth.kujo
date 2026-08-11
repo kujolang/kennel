@@ -197,13 +197,22 @@ export func hosted_auth_token_store(action, payload) {
 			}
 		}
 		entry := store_doc["tokens"][entry_key]
+		token_value := trim(to_string(dict_get_or(entry, "token", "")))
+		if token_value == "" {
+			return {
+				"ok": false,
+				"error": "Stored auth token is empty for the requested registry/user.",
+				"action": "get",
+				"store_path": store_path
+			}
+		}
 		return {
 			"ok": true,
 			"action": "get",
 			"entry_key": entry_key,
 			"registry": dict_get_or(entry, "registry", ""),
 			"user": dict_get_or(entry, "user", ""),
-			"token": dict_get_or(entry, "token", ""),
+			"token": token_value,
 			"store_path": store_path
 		}
 	}
