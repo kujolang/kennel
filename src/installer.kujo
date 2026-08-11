@@ -121,7 +121,10 @@ func copy_local_package(path, install_path) {
 func cleanup_install_path(install_path) {
 	patterns := [".git", "node_modules", "dist", "build", "kennel_packages", ".kennel_tmp"]
 	for pattern in patterns {
-		remove_path(install_path + "/" + pattern)
+		target_path := install_path + "/" + pattern
+		if path_exists(target_path) && is_safe_install_path(target_path) {
+			run_shell("rm -rf -- " + shell_quote(target_path))
+		}
 	}
 }
 

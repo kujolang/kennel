@@ -217,6 +217,31 @@ func parse_checksum(value) {
 	}
 }
 
+func is_semver_core(value) {
+	semver_text := trim(to_string(value))
+	if starts_with(semver_text, "v") || starts_with(semver_text, "V") {
+		semver_text = substring(semver_text, 1, len(semver_text))
+	}
+	parts := split(semver_text, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for part in parts {
+		if part == "" {
+			return false
+		}
+		i := 0
+		while i < len(part) {
+			ch := substring(part, i, i + 1)
+			if ch < "0" || ch > "9" {
+				return false
+			}
+			i = i + 1
+		}
+	}
+	return true
+}
+
 func parse_ref_kind(value) {
 	text := trim(to_string(value))
 	if text == "" {
@@ -237,13 +262,7 @@ func parse_ref_kind(value) {
 			"value": text
 		}
 	}
-	if starts_with(text, "v") && index_of(text, ".") >= 0 {
-		return {
-			"kind": "version",
-			"value": text
-		}
-	}
-	if index_of(text, ".") >= 0 && index_of(text, "/") < 0 {
+	if is_semver_core(text) {
 		return {
 			"kind": "version",
 			"value": text

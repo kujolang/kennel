@@ -1,13 +1,13 @@
 test_setup {
 	from src.cli_adapter import flag_value, has_flag, parse_cli, positional
-	from commands_shared import enforce_source_policy, load_static_index, read_login_token_from_file, source_policy_from_manifest, source_policy_with_cli_overrides
-	from dependency_spec import parse_source_reference
+	from commands_shared import enforce_source_policy, load_registry_package_metadata, load_static_index, read_login_token_from_file, source_policy_from_manifest, source_policy_with_cli_overrides
+	from dependency_spec import parse_source_reference, source_ref_from_dependency_entry
 	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version
 	from installer import install_resolved
 	from lockfile import empty_lockfile, set_packages
 	from manifest import default_manifest
 	from resolver import format_git_ls_remote_error, resolve_dependency, resolve_dependency_with_policy
-	from utils import dict_get_or
+	from utils import dict_get_or, parse_ref_kind
 }
 
 test "parse_cli handles --flag value and mixed positionals" {
@@ -65,6 +65,12 @@ test "parse_cli boolean flags and helper accessors are stable" {
 	assert_equal(flag_value(parsed, "--missing", "fallback"), "fallback")
 }
 
+test "parse_cli does not consume positionals after known boolean flags" {
+	parsed := parse_cli(["new", "--force", "demo-app"])
+	assert_equal(flag_value(parsed, "--force", false), true)
+	assert_equal(positional(parsed, 0, ""), "demo-app")
+}
+
 test "parse_cli preserves unknown tokens and positional order" {
 	parsed := parse_cli(["frobnicate", "alpha", "--mode=fast", "beta", "--noop"])
 	assert_equal(parsed["command"], "frobnicate")
@@ -102,6 +108,91 @@ test "parse github https with tag" {
 	assert_equal(parsed["ok"], true)
 	assert_equal(parsed["kind"], "git")
 	assert_equal(parsed["requested"], "v0.14.0")
+}
+
+test "github source parsing rejects extra repository segments and preserves delimiter characters in refs" {
+	extra_segment := parse_source_reference("github:kujolang/kujo/extra@main")
+	assert_equal(extra_segment["ok"], false)
+
+	shorthand_ref := parse_source_reference("github:kujolang/kujo@feature@beta")
+	assert_equal(shorthand_ref["ok"], true)
+	assert_equal(shorthand_ref["requested"], "feature@beta")
+
+	https_ref := parse_source_reference("https://github.com/kujolang/kujo.git#release#beta")
+	assert_equal(https_ref["ok"], true)
+	assert_equal(https_ref["requested"], "release#beta")
+}
+
+test "manifest dependency parsing rejects empty paths and ambiguous selectors" {
+	empty_path := source_ref_from_dependency_entry("empty", {"path": ""})
+	assert_equal(empty_path["ok"], false)
+	assert_true(index_of(to_string(empty_path["error"]), "cannot be empty") >= 0)
+
+	ambiguous_source := source_ref_from_dependency_entry("ambiguous", {
+		"path": "/tmp",
+		"source": "github:kujolang/kujo"
+	})
+	assert_equal(ambiguous_source["ok"], false)
+
+	ambiguous_selector := source_ref_from_dependency_entry("ambiguous", {
+		"source": "github:kujolang/kujo",
+		"tag": "v1.0.0",
+		"commit": "abcdef0"
+	})
+	assert_equal(ambiguous_selector["ok"], false)
+}
+
+test "ref classification only treats semantic versions as versions" {
+	assert_equal(parse_ref_kind("release.1")["kind"], "ref")
+	assert_equal(parse_ref_kind("V1.2.3")["kind"], "version")
+}
+
+test "installer cleanup removes excluded directories instead of retaining hidden trash" {
+	tmp_root := "/tmp/kennel-installer-cleanup-contract"
+	source_dir := tmp_root + "/source"
+	execute_status("rm -rf '" + tmp_root + "'")
+	execute_status("mkdir -p '" + source_dir + "/node_modules' '" + source_dir + "/dist'")
+	write_file(source_dir + "/kennel.toml", "[package]\nname = \"source\"\nversion = \"0.1.0\"\n", true)
+	write_file(source_dir + "/node_modules/dependency.txt", "excluded", true)
+	write_file(source_dir + "/dist/artifact.txt", "excluded", true)
+
+	result := install_resolved(tmp_root, {
+		"name": "clean-source",
+		"kind": "path",
+		"source": "file:" + source_dir,
+		"requested": "",
+		"requested_kind": "none",
+		"resolved_ref": "local",
+		"resolved_commit": "",
+		"url": "",
+		"path": source_dir
+	})
+	assert_equal(result["ok"], true)
+	install_path := tmp_root + "/kennel_packages/clean-source"
+	assert_equal(path_exists(install_path + "/node_modules"), false)
+	assert_equal(path_exists(install_path + "/dist"), false)
+	assert_equal(path_exists(install_path + "/.kennel_installer_trash"), false)
+
+	execute_status("rm -rf '" + tmp_root + "'")
+}
+
+test "static registry metadata paths cannot escape the index directory" {
+	tmp_root := "/tmp/kennel-static-metadata-path-contract"
+	index_dir := tmp_root + "/registry"
+	execute_status("rm -rf '" + tmp_root + "'")
+	execute_status("mkdir -p '" + index_dir + "'")
+	write_file(tmp_root + "/outside.json", "{\"name\":\"outside\"}", true)
+	write_file(index_dir + "/index.json", "{\"packages\":[]}", true)
+
+	traversal := load_registry_package_metadata(tmp_root, index_dir + "/index.json", "../outside.json")
+	assert_equal(traversal["ok"], false)
+	assert_true(index_of(to_string(traversal["error"]), "Invalid metadata_path") >= 0)
+
+	absolute := load_registry_package_metadata(tmp_root, index_dir + "/index.json", tmp_root + "/outside.json")
+	assert_equal(absolute["ok"], false)
+	assert_true(index_of(to_string(absolute["error"]), "Invalid metadata_path") >= 0)
+
+	execute_status("rm -rf '" + tmp_root + "'")
 }
 
 test "default manifest includes production status metadata and dependencies table" {

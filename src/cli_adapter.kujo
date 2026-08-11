@@ -1,5 +1,9 @@
 # Kennel's command-first compatibility contract remains local until the
 # first-party spec parser can preserve its help, error, and flag semantics.
+func is_boolean_flag(flag_name) {
+	return flag_name == "--force" || flag_name == "--allow-mutable-ref" || flag_name == "--private" || flag_name == "--public" || flag_name == "--undo"
+}
+
 func parse_cli(argv) {
 	if len(argv) == 0 {
 		return {"command": "help", "positionals": [], "flags": {}}
@@ -15,6 +19,11 @@ func parse_cli(argv) {
 			if eq_index >= 0 {
 				flag_name := substring(token, 0, eq_index)
 				flags[flag_name] := substring(token, eq_index + 1, len(token))
+				i := i + 1
+				continue
+			}
+			if is_boolean_flag(token) {
+				flags[token] := true
 				i := i + 1
 				continue
 			}

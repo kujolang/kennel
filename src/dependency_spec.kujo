@@ -9,10 +9,10 @@ func normalize_github_repo(repo_part) {
 		trimmed := substring(trimmed, 1, len(trimmed))
 	}
 	parts := split(trimmed, "/")
-	if len(parts) < 2 {
+	if len(parts) != 2 {
 		return {
 			"ok": false,
-			"error": "GitHub source must include owner/repo"
+			"error": "GitHub source must contain exactly owner/repo"
 		}
 	}
 	owner := trim(parts[0])
@@ -34,10 +34,10 @@ func parse_github_source(raw_source) {
 	body := substring(raw_source, len("github:"), len(raw_source))
 	requested := ""
 	repo_part := body
-	if index_of(body, "@") >= 0 {
-		pair := split(body, "@")
-		repo_part := pair[0]
-		requested := pair[1]
+	delimiter_index := index_of(body, "@")
+	if delimiter_index >= 0 {
+		repo_part := substring(body, 0, delimiter_index)
+		requested := substring(body, delimiter_index + 1, len(body))
 	}
 	normalized := normalize_github_repo(repo_part)
 	if normalized["ok"] == false {
@@ -62,10 +62,10 @@ func parse_github_source(raw_source) {
 func parse_github_url_source(raw_source) {
 	requested := ""
 	url := raw_source
-	if index_of(raw_source, "#") >= 0 {
-		pair := split(raw_source, "#")
-		url := pair[0]
-		requested := pair[1]
+	delimiter_index := index_of(raw_source, "#")
+	if delimiter_index >= 0 {
+		url := substring(raw_source, 0, delimiter_index)
+		requested := substring(raw_source, delimiter_index + 1, len(raw_source))
 	}
 	without_scheme := replace(url, "https://github.com/", "")
 	normalized := normalize_github_repo(without_scheme)
@@ -92,6 +92,13 @@ func parse_local_source(raw_source) {
 	path_value := raw_source
 	if starts_with(raw_source, "file:") {
 		path_value := substring(raw_source, len("file:"), len(raw_source))
+	}
+	path_value = trim(path_value)
+	if path_value == "" {
+		return {
+			"ok": false,
+			"error": "Local package path cannot be empty"
+		}
 	}
 	abs := path_absolute(path_value)
 	if path_exists(abs) == false {
@@ -151,7 +158,37 @@ func source_ref_from_dependency_entry(name, dep_entry) {
 			"error": "Dependency `" + name + "` must be a table with source metadata"
 		}
 	}
+	source_field_count := 0
+	for source_field in ["path", "source", "git"] {
+		if has_key(dep_entry, source_field) {
+			source_field_count = source_field_count + 1
+		}
+	}
+	if source_field_count > 1 {
+		return {
+			"ok": false,
+			"error": "Dependency `" + name + "` must declare exactly one of source/git/path"
+		}
+	}
+	selector_count := 0
+	for selector_field in ["version", "tag", "commit", "range", "ref"] {
+		if has_key(dep_entry, selector_field) {
+			selector_count = selector_count + 1
+		}
+	}
+	if selector_count > 1 {
+		return {
+			"ok": false,
+			"error": "Dependency `" + name + "` must declare at most one version/tag/commit/range/ref selector"
+		}
+	}
 	if has_key(dep_entry, "path") {
+		if selector_count > 0 {
+			return {
+				"ok": false,
+				"error": "Path dependency `" + name + "` cannot declare a version/tag/commit/range/ref selector"
+			}
+		}
 		path_value := trim_or(dep_entry["path"], "")
 		parsed := parse_local_source(path_value)
 		if parsed["ok"] == false {
