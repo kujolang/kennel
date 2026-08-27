@@ -22,6 +22,8 @@ Current verified behaviors in this repository:
 - `--flag=value` parsing preserves complete values, including token-like values containing additional `=` characters
 - Lockfile output is deterministic and order-stable
 - Direct and transitive dependencies are installed and locked deterministically
+- Kujo automatically discovers installed package roots named by `kennel.lock`,
+  so normal consumers do not need to construct `KUJO_MODULE_PATH` manually
 - Unsafe dependency install paths are rejected before local copy or git clone work starts
 - Pinned refs are protected during update operations
 - Token-store handling uses safer defaults and restrictive file permissions
