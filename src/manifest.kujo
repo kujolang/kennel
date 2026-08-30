@@ -1,4 +1,4 @@
-from src.utils import dict_get_or, path_basename
+from src.utils import dict_get_or, path_basename, write_text_atomic
 
 MANIFEST_FILENAME := "kennel.toml"
 
@@ -101,7 +101,7 @@ func load_manifest(cwd) {
 func save_manifest(cwd, manifest_obj) {
 	path := manifest_path(cwd)
 	raw := to_toml(manifest_obj)
-	write_file(path, raw, true)
+	write_text_atomic(path, raw)
 	return path
 }
 

@@ -1,5 +1,5 @@
 from path_helpers import parent_dir_path
-from src.utils import command_ok, dict_get_or, run_shell, shell_quote
+from src.utils import dict_get_or, ensure_dir
 
 func default_token_store_path() {
 	home_dir := trim(to_string(env("HOME")))
@@ -65,43 +65,33 @@ func load_token_store(path_value) {
 	}
 }
 
-func apply_restrictive_file_permissions(path_value) {
-	permission_result := run_shell("chmod 600 " + shell_quote(path_value))
-	if command_ok(permission_result) == false {
-		return {
-			"ok": false,
-			"error": "Failed to secure token store file permissions for " + path_value + ": " + trim(to_string(permission_result.stderr))
+func write_private_text_atomic(path_value, content) {
+	parent_path := parent_dir_path(path_value)
+	temp_path := parent_path + "/." + basename(path_value) + ".kennel-private-" + uuid_v4() + ".tmp"
+	try {
+		receipt := io_write_private_file(temp_path, to_string(content), 384)
+		if dict_get_or(receipt, "verified", false) == false || dict_get_or(receipt, "mode", 0) != 384 {
+			throw "Private temporary file permissions could not be verified."
 		}
-	}
-	return {
-		"ok": true
+		rename_file(temp_path, path_value)
+		return path_value
+	} except err {
+		if file_exists(temp_path) {
+			delete_file(temp_path)
+		}
+		throw to_string(err)
 	}
 }
 
 func save_token_store(path_value, store_doc) {
 	parent_path := parent_dir_path(path_value)
-	mkdir_result := run_shell("mkdir -p " + shell_quote(parent_path))
-	if command_ok(mkdir_result) == false {
-		return {
-			"ok": false,
-			"error": "Failed to create token store directory: " + parent_path,
-			"path": path_value
-		}
-	}
+	ensure_dir(parent_path)
 	try {
-		write_file(path_value, to_json(store_doc), true)
+		write_private_text_atomic(path_value, to_json(store_doc))
 	} except err {
 		return {
 			"ok": false,
 			"error": "Failed to write token store: " + to_string(err),
-			"path": path_value
-		}
-	}
-	hardened := apply_restrictive_file_permissions(path_value)
-	if hardened["ok"] == false {
-		return {
-			"ok": false,
-			"error": hardened["error"],
 			"path": path_value
 		}
 	}

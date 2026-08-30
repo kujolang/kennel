@@ -7,7 +7,7 @@ from lockfile import empty_lockfile, load_lockfile, lockfile_path, save_lockfile
 from manifest import dependency_map, ensure_manifest_shape, load_manifest, manifest_path, save_manifest
 from path_helpers import parent_dir_path
 from resolver import lock_entry_from_install, resolve_dependency_with_policy
-from src.utils import dict_get_or, run_shell, shell_quote, validate_identifier
+from src.utils import dict_get_or, validate_identifier, write_text_atomic
 
 func ensure_project_manifest(cwd) {
 	loaded := load_manifest(cwd)
@@ -209,17 +209,17 @@ func restore_project_state(snapshot) {
 	manifest_file := to_string(dict_get_or(snapshot, "manifest_path", ""))
 	lock_file := to_string(dict_get_or(snapshot, "lock_path", ""))
 	if dict_get_or(snapshot, "manifest_exists", false) {
-		write_file(manifest_file, to_string(dict_get_or(snapshot, "manifest_raw", "")), true)
+		write_text_atomic(manifest_file, to_string(dict_get_or(snapshot, "manifest_raw", "")))
 	} else {
 		if manifest_file != "" && file_exists(manifest_file) {
-			run_shell("rm -f " + shell_quote(manifest_file))
+			delete_file(manifest_file)
 		}
 	}
 	if dict_get_or(snapshot, "lock_exists", false) {
-		write_file(lock_file, to_string(dict_get_or(snapshot, "lock_raw", "")), true)
+		write_text_atomic(lock_file, to_string(dict_get_or(snapshot, "lock_raw", "")))
 	} else {
 		if lock_file != "" && file_exists(lock_file) {
-			run_shell("rm -f " + shell_quote(lock_file))
+			delete_file(lock_file)
 		}
 	}
 }

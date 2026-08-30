@@ -27,6 +27,23 @@ func is_safe_install_path(path) {
 	return true
 }
 
+func delete_tree(path) {
+	if path_is_symlink(path) || path_is_file(path) {
+		delete_file(path)
+		return true
+	}
+	if path_is_dir(path) == false {
+		return false
+	}
+	for entry_name in list_dir(path) {
+		if delete_tree(path + "/" + entry_name) == false {
+			return false
+		}
+	}
+	os_rmdir(path)
+	return true
+}
+
 func delete_install_path(path) {
 	if trim(path) == "" {
 		return true
@@ -37,8 +54,11 @@ func delete_install_path(path) {
 	if is_safe_install_path(path) == false {
 		return false
 	}
-	result := run_shell("rm -rf -- " + shell_quote(path))
-	return command_ok(result)
+	try {
+		return delete_tree(path)
+	} except err {
+		return false
+	}
 }
 
 func displace_install_path(path) {
@@ -58,10 +78,17 @@ func displace_install_path(path) {
 	trash_root := parent_dir + "/.kennel_installer_trash"
 	ensure_dir(trash_root)
 	trash_path := trash_root + "/" + path_basename(path) + "-" + to_string(now())
-	result := run_shell("mv " + shell_quote(path) + " " + shell_quote(trash_path))
-	return {
-		"ok": command_ok(result),
-		"trash_path": trash_path
+	try {
+		rename_file(path, trash_path)
+		return {
+			"ok": true,
+			"trash_path": trash_path
+		}
+	} except err {
+		return {
+			"ok": false,
+			"trash_path": trash_path
+		}
 	}
 }
 
@@ -75,7 +102,11 @@ func discard_displaced_path(displacement) {
 	}
 	trash_root := parent_dir_path(trash_path)
 	if is_safe_install_path(trash_root) {
-		run_shell("rmdir " + shell_quote(trash_root))
+		try {
+			os_rmdir(trash_root)
+		} except err {
+			# A non-empty shared trash directory is expected during concurrent replacements.
+		}
 	}
 	return true
 }
@@ -88,13 +119,18 @@ func restore_displaced_path(install_path, displacement) {
 	if trash_path == "" || path_exists(trash_path) == false {
 		return true
 	}
-	restore_result := run_shell("mv " + shell_quote(trash_path) + " " + shell_quote(install_path))
-	if command_ok(restore_result) == false {
+	try {
+		rename_file(trash_path, install_path)
+	} except err {
 		return false
 	}
 	trash_root := parent_dir_path(trash_path)
 	if is_safe_install_path(trash_root) {
-		run_shell("rmdir " + shell_quote(trash_root))
+		try {
+			os_rmdir(trash_root)
+		} except err {
+			# A non-empty shared trash directory is expected during concurrent replacements.
+		}
 	}
 	return true
 }
@@ -214,7 +250,7 @@ func cleanup_install_path(install_path) {
 	for pattern in patterns {
 		target_path := install_path + "/" + pattern
 		if path_exists(target_path) && is_safe_install_path(target_path) {
-			run_shell("rm -rf -- " + shell_quote(target_path))
+			delete_tree(target_path)
 		}
 	}
 }

@@ -1,9 +1,10 @@
-from src.utils import dict_get_or, clone_dict, clone_array, ensure_dir, path_basename, shell_quote, run_shell, command_ok, trim_or, starts_with_any, is_hex_lower, is_valid_identifier, validate_identifier, is_base64_text, is_safe_signing_key, parse_checksum, parse_ref_kind, to_pretty_json, is_truthy_string, insert_sorted_by_name
+from src.utils import dict_get_or, clone_dict, clone_array, ensure_dir, write_text_atomic, path_basename, shell_quote, run_shell, command_ok, trim_or, starts_with_any, is_hex_lower, is_valid_identifier, validate_identifier, is_base64_text, is_safe_signing_key, parse_checksum, parse_ref_kind, to_pretty_json, is_truthy_string, insert_sorted_by_name
 
 export dict_get_or := dict_get_or
 export clone_dict := clone_dict
 export clone_array := clone_array
 export ensure_dir := ensure_dir
+export write_text_atomic := write_text_atomic
 export path_basename := path_basename
 export shell_quote := shell_quote
 export run_shell := run_shell

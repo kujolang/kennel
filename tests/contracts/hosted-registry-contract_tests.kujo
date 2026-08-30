@@ -26,13 +26,27 @@ test "hosted auth token store supports set/get/clear lifecycle" {
 	assert_equal(permissions_result.success, true)
 	assert_true(index_of(to_string(permissions_result.stdout), "rw-------") >= 0)
 
+	replace_result := auth_token_store("set", {
+		"store_path": store_path,
+		"registry": "local-hosted",
+		"user": "alice",
+		"token": "token-alice-replaced-456"
+	})
+	assert_equal(replace_result["ok"], true)
+	replaced_permissions := execute_status("ls -l '" + store_path + "'")
+	assert_equal(replaced_permissions.success, true)
+	assert_true(index_of(to_string(replaced_permissions.stdout), "rw-------") >= 0)
+	temp_probe := execute_status("find /tmp -maxdepth 1 -name '.kennel-auth-token-store-test.json.kennel-private-*.tmp' -print")
+	assert_equal(temp_probe.success, true)
+	assert_equal(trim(to_string(temp_probe.stdout)), "")
+
 	get_result := auth_token_store("get", {
 		"store_path": store_path,
 		"registry": "local-hosted",
 		"user": "alice"
 	})
 	assert_equal(get_result["ok"], true)
-	assert_equal(get_result["token"], "token-alice-123")
+	assert_equal(get_result["token"], "token-alice-replaced-456")
 
 	list_result := auth_token_store("list", {
 		"store_path": store_path

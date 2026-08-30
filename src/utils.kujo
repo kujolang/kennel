@@ -44,6 +44,11 @@ func ensure_dir(path) {
 	}
 }
 
+func write_text_atomic(path, content) {
+	write_file_atomic(path, to_string(content), true)
+	return path
+}
+
 func path_basename(path) {
 	base := basename(path)
 	if ends_with(base, "/") {
@@ -305,6 +310,7 @@ export dict_get_or := dict_get_or
 export clone_dict := clone_dict
 export clone_array := clone_array
 export ensure_dir := ensure_dir
+export write_text_atomic := write_text_atomic
 export path_basename := path_basename
 export shell_quote := shell_quote
 export run_shell := run_shell

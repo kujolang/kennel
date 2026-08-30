@@ -6,7 +6,7 @@ from installer import install_locked_package, remove_install_path
 from lockfile import empty_lockfile, load_lockfile, remove_package, save_lockfile
 from manifest import default_manifest, dependency_exists, dependency_map, infer_project_name, manifest_path, remove_dependency, save_manifest, set_dependency
 from resolver import resolve_dependency
-from src.utils import dict_get_or
+from src.utils import dict_get_or, write_text_atomic
 from validator import print_validation_report, validate_manifest
 
 func install_line(name, install_path) {
@@ -70,18 +70,18 @@ func command_new(cwd, parsed_cli) {
 	kujo_toml = kujo_toml + "\n"
 	kujo_toml = kujo_toml + "[runtime]\n"
 	kujo_toml = kujo_toml + "strict = true\n"
-	write_file(project_dir + "/kujo.toml", kujo_toml, true)
+	write_text_atomic(project_dir + "/kujo.toml", kujo_toml)
 
 	main_kujo := "func main() {\n"
 	main_kujo = main_kujo + "\tprint(\"Hello from " + project_name + "\")\n"
 	main_kujo = main_kujo + "}\n\n"
 	main_kujo = main_kujo + "main()\n"
-	write_file(project_dir + "/src/main.kujo", main_kujo, true)
+	write_text_atomic(project_dir + "/src/main.kujo", main_kujo)
 
 	test_kujo := "test \"project scaffold compiles\" {\n"
 	test_kujo = test_kujo + "\tassert_true(true)\n"
 	test_kujo = test_kujo + "}\n"
-	write_file(project_dir + "/tests/main_tests.kujo", test_kujo, true)
+	write_text_atomic(project_dir + "/tests/main_tests.kujo", test_kujo)
 
 	readme_md := "# " + project_name + "\n\n"
 	readme_md = readme_md + "Bootstrapped with `kennel new`.\n\n"
@@ -90,7 +90,7 @@ func command_new(cwd, parsed_cli) {
 	readme_md = readme_md + "kujo run src/main.kujo\n"
 	readme_md = readme_md + "kujo test\n"
 	readme_md = readme_md + "```\n"
-	write_file(project_dir + "/README.md", readme_md, true)
+	write_text_atomic(project_dir + "/README.md", readme_md)
 
 	print_lines([
 		"Created Kujo project scaffold: " + project_dir,

@@ -4,8 +4,8 @@ test_setup {
 	from dependency_spec import parse_source_reference, source_ref_from_dependency_entry
 	from future_resolvers import auth_token_store, hosted_api_package_metadata_endpoint, hosted_api_search_endpoint, manage_package_access, publish_package, resolve_registry_index_name, search_registry_index, set_package_visibility, token_store_path, verify_package_signature, yank_package_version
 	from installer import install_resolved
-	from lockfile import empty_lockfile, set_packages
-	from manifest import default_manifest
+	from lockfile import empty_lockfile, load_lockfile, save_lockfile, set_packages
+	from manifest import default_manifest, load_manifest, save_manifest
 	from resolver import format_git_ls_remote_error, resolve_dependency, resolve_dependency_with_policy
 	from utils import dict_get_or, parse_ref_kind
 }
@@ -237,6 +237,36 @@ test "default manifest includes production status metadata and dependencies tabl
 	assert_equal(has_key(manifest["package"], "status"), 1)
 	assert_equal(manifest["package"]["status"]["stage"], "production")
 	assert_equal(manifest["package"]["status"]["stability"], "stable")
+}
+
+test "manifest and lockfile saves atomically replace complete documents" {
+	tmp_root := "/tmp/kennel-atomic-persistence-contract"
+	execute_status("rm -rf '" + tmp_root + "'")
+	execute_status("mkdir -p '" + tmp_root + "'")
+
+	manifest_one := default_manifest("atomic-one")
+	save_manifest(tmp_root, manifest_one)
+	manifest_two := default_manifest("atomic-two")
+	save_manifest(tmp_root, manifest_two)
+	loaded_manifest := load_manifest(tmp_root)
+	assert_equal(loaded_manifest["ok"], true)
+	assert_equal(loaded_manifest["manifest"]["package"]["name"], "atomic-two")
+
+	lock_one := empty_lockfile()
+	lock_one = set_packages(lock_one, [{"name": "first"}])
+	save_lockfile(tmp_root, lock_one)
+	lock_two := empty_lockfile()
+	lock_two = set_packages(lock_two, [{"name": "second"}])
+	save_lockfile(tmp_root, lock_two)
+	loaded_lock := load_lockfile(tmp_root)
+	assert_equal(loaded_lock["ok"], true)
+	assert_equal(loaded_lock["lockfile"]["package"][0]["name"], "second")
+
+	temp_probe := execute_status("find '" + tmp_root + "' -maxdepth 1 -name '.*.kujo-atomic-*.tmp' -print")
+	assert_equal(temp_probe.success, true)
+	assert_equal(trim(to_string(temp_probe.stdout)), "")
+
+	execute_status("rm -rf '" + tmp_root + "'")
 }
 
 test "source policy blocks mutable refs when strict mode is enabled" {

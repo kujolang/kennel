@@ -3,7 +3,7 @@
 
 from hosted_auth import hosted_auth_token_store, hosted_token_store_path
 from hosted_trust import hosted_verify_package_signature
-from src.utils import command_ok, dict_get_or, is_base64_text, is_safe_signing_key, parse_checksum, run_shell, shell_quote, validate_identifier
+from src.utils import dict_get_or, ensure_dir, is_base64_text, is_safe_signing_key, parse_checksum, validate_identifier, write_text_atomic
 
 func index_packages(index_doc) {
 	if type(index_doc) != "dict" {
@@ -202,11 +202,11 @@ func restore_file_state(state) {
 		return
 	}
 	if dict_get_or(state, "exists", false) {
-		write_file(path_value, to_string(dict_get_or(state, "raw", "")), true)
+		write_text_atomic(path_value, to_string(dict_get_or(state, "raw", "")))
 		return
 	}
 	if file_exists(path_value) {
-		run_shell("rm -f " + shell_quote(path_value))
+		delete_file(path_value)
 	}
 }
 
@@ -214,11 +214,11 @@ func persist_json_pair_atomic(path_one, doc_one, path_two, doc_two, options) {
 	state_one := capture_file_state(path_one)
 	state_two := capture_file_state(path_two)
 	try {
-		write_file(path_one, to_json(doc_one), true)
+		write_text_atomic(path_one, to_json(doc_one))
 		if dict_get_or(options, "test_fail_after_first_write", false) == true {
 			throw "Simulated paired-write failure after first write."
 		}
-		write_file(path_two, to_json(doc_two), true)
+		write_text_atomic(path_two, to_json(doc_two))
 		return {
 			"ok": true
 		}
@@ -885,11 +885,11 @@ export func publish_package(package_path, publish_options) {
 		registry_dir := package_path + "/" + registry_dir
 	}
 	packages_dir := registry_dir + "/packages"
-	mkdir_result := run_shell("mkdir -p " + shell_quote(packages_dir))
-	if command_ok(mkdir_result) == false {
+	ensure_dir(packages_dir)
+	if path_exists(packages_dir) == false || path_is_dir(packages_dir) == false {
 		return {
 			"ok": false,
-			"error": "Failed to prepare registry package directory: " + trim(to_string(mkdir_result.stderr)),
+			"error": "Failed to prepare registry package directory: " + packages_dir,
 			"package": package_name,
 			"version": package_version,
 			"registry_dir": registry_dir
@@ -1366,7 +1366,7 @@ export func manage_package_access(package_name, access_action, access_options) {
 	access_doc["teams"] := teams
 	metadata_doc["access"] := access_doc
 	if mutated {
-		write_file(metadata_path, to_json(metadata_doc), true)
+		write_text_atomic(metadata_path, to_json(metadata_doc))
 	}
 	return {
 		"ok": true,

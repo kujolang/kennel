@@ -11,6 +11,7 @@ run_script() {
 }
 
 if [[ "$MODE" == "core" ]]; then
+	run_script "$ROOT_DIR/scripts/verify-atomic-persistence.sh"
 	run_script "$ROOT_DIR/scripts/verify-cli-messages.sh"
 	run_script "$ROOT_DIR/scripts/verify-git-diagnostics.sh"
 	run_script "$ROOT_DIR/scripts/verify-pinned-refs.sh"

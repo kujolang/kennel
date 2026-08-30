@@ -1,4 +1,4 @@
-from src.utils import insert_sorted_by_name
+from src.utils import insert_sorted_by_name, write_text_atomic
 
 LOCKFILE_FILENAME := "kennel.lock"
 LOCKFILE_VERSION := 1
@@ -56,7 +56,7 @@ func save_lockfile(cwd, lockfile_obj) {
 	lockfile["generated_by"] := "kennel"
 	lockfile["generated_at"] := format_date(now(), "YYYY-MM-DD HH:mm:ss")
 	path := lockfile_path(cwd)
-	write_file(path, to_toml(lockfile), true)
+	write_text_atomic(path, to_toml(lockfile))
 	return path
 }
 
