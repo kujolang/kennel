@@ -26,7 +26,8 @@ Current verified behaviors in this repository:
   so normal consumers do not need to construct `KUJO_MODULE_PATH` manually
 - Unsafe dependency install paths are rejected before local copy or git clone work starts
 - Pinned refs are protected during update operations
-- Token-store handling uses safer defaults and restrictive file permissions
+- Manifest, lockfile, registry metadata, and scaffold writes use atomic replacement
+- Token-store replacement is atomic and preserves restrictive mode `0600`
 
 These behaviors are validated through contract suites and verify scripts in `scripts/`.
 
@@ -39,7 +40,7 @@ Validated in current project automation:
 
 Toolchain assumptions:
 
-- Kujo binary available as `kujo` or overridden with `KUJO_BIN`
+- Kujo 1.0.0 or newer available as `kujo` or overridden with `KUJO_BIN`
 - Bash available for verification scripts
 
 > Note: the current CLI surface includes `help`; a dedicated `version` flag is not implemented yet.

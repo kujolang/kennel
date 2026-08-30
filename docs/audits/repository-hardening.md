@@ -34,10 +34,18 @@ The full script inventory, split contract suites, CI workflows, manifests, root 
 | KH-003 | P1 | Security / filesystem | Lexical install-path checks allowed `kennel_packages` itself to be a symlink, permitting writes outside the project tree. | The boundary check only searched for `/kennel_packages/`. | Reject symlinked package roots with Kujo's native `path_is_symlink`; added an escape regression test. | Fixed |
 | KH-004 | P1 | Benchmark / agent output | The benchmark claimed machine-readable JSON but emitted invalid JSON; its CI check used substring matching and could not detect the defect. | Python JSON parsing failed while the existing verifier passed. | Emit real indentation and parse/assert schema-critical fields in CI. | Fixed |
 | KH-005 | P2 | Documentation | README deferred local hosted workflows that the same README and implementation mark available; the hardening backlog cited already-replaced code paths. | Capability, deferred-roadmap, and backlog sections contradicted current source. | Aligned operated-service boundaries and refreshed backlog evidence/completed safeguards. | Fixed |
-| KH-006 | Needs more evidence | Crash consistency | Manifest, lockfile, and token-store writes directly overwrite targets; command-level rollback does not protect against process or machine termination mid-write. | `save_manifest`, `save_lockfile`, and token-store persistence call `write_file` on final paths. | Retain as focused follow-up pending a portable durability design and failure-injection proof. | Open |
-| KH-007 | Needs more evidence | Performance / scale | Install and full-lock rebuild paths remain sequential and metadata is reparsed across separate CLI invocations. | Control flow is sequential, but no representative large dependency graph or service workload is maintained here. | Do not add concurrency or caching without representative fixtures, invalidation semantics, and measurements. | Deferred |
+| KH-006 | P1 | Crash consistency | Manifest, lockfile, and token-store writes directly overwrote targets; command-level rollback did not protect against process or machine termination mid-write. | `save_manifest`, `save_lockfile`, and token-store persistence called `write_file` on final paths. | Adopt Kujo's synced same-directory atomic writer for normal state and a verified private-temp-plus-rename flow for token stores; add behavioral tests and a source ratchet. | Fixed |
+| KH-007 | Needs more evidence | Performance / scale | Install and full-lock rebuild paths remain sequential and metadata is reparsed across separate CLI invocations. | The existing benchmark has no representative large dependency graph and separate CLI processes cannot share a command-local cache. | Close as unproven optimization work; require a representative workload before reopening. | Closed — no action |
 
 ## Changes Implemented
+
+### Follow-up: crash-safe persistence
+
+- Manifest, lockfile, registry metadata, rollback restoration, and generated scaffold writes now use `write_file_atomic`, which writes, flushes, syncs, and atomically renames a same-directory temporary file.
+- Hosted token stores now write content to a verified mode-`0600` private temporary path and atomically rename it over the destination, preserving restrictive permissions during replacement.
+- Installer displacement/restoration and recursive destructive cleanup now use native Kujo filesystem operations. Git operations and compatibility-preserving recursive directory copy remain guarded external commands.
+- `scripts/verify-atomic-persistence.sh` prevents direct `write_file` calls from returning to persistent state modules and checks the private/atomic primitives remain wired.
+- Contract coverage verifies repeated complete manifest/lock replacement, token replacement content, final permissions, and temporary-file cleanup.
 
 ### Transactional package replacement
 
@@ -73,13 +81,15 @@ The full script inventory, split contract suites, CI workflows, manifests, root 
 
 Both benchmark runs used three iterations, one warmup, UTC, C locale, the same fixture set, and the same Kujo binary name. Runtime results remained under the documented 15% regression threshold, but only the resource-retention and JSON-validity changes are claimed as measured improvements.
 
+The persistence follow-up used adjacent five-iteration runs against a detached `6f9f81f` worktree and the updated tree on the same host: install 1,048 → 1,167 ms (+11.4%), update 1,195 → 1,087 ms (-9.0%), API search 715 → 656 ms (-8.3%), and API metadata 756 → 699 ms (-7.5%). Every operation remained inside the 15% review threshold; the result supports absence of a material regression rather than a speedup claim.
+
 No token/context optimization was justified: Kennel does not invoke models or expose MCP/tool schemas, and its agent guidance is already scoped with progressive file/search instructions. No dependency-size measurement applies because the manifests declare no runtime or development packages.
 
 ## Security
 
 Reviewed boundaries included CLI flags/identifiers, local and Git dependency sources, install paths, shell quoting, package-root containment, symlinks, static index metadata paths, hosted registry mutation/read authorization, token-store parsing and permissions, trust metadata shape, mutable-ref policy, and Git subprocess diagnostics.
 
-Fixed the symlinked package-root escape and added deterministic regression coverage. Existing traversal, identifier, static metadata-path, auth fail-closed, signature/checksum shape, and mutable-ref controls remain enabled. Remaining concern KH-006 is crash consistency, not a demonstrated authorization bypass.
+Fixed the symlinked package-root escape and crash-consistency gap, with deterministic regression coverage and a source-level persistence ratchet. Existing traversal, identifier, static metadata-path, auth fail-closed, signature/checksum shape, and mutable-ref controls remain enabled.
 
 ## Compatibility
 
@@ -89,19 +99,20 @@ Fixed the symlinked package-root escape and added deterministic regression cover
 - Registry JSON schemas: unchanged.
 - Benchmark schema: unchanged at `1.0`; serialization corrected to valid JSON.
 - Configuration and environment variables: unchanged.
+- Minimum runtime declaration: raised from Kujo 0.1.0 to 1.0.0 because the atomic and private-file primitives used here are stable in Kujo 1.0.0.
 - External consumers: no migration required. Consumers that had worked around malformed benchmark output should remove that workaround.
 
 ## Cross-Repository Follow-Ups
 
-- `kujo`: consider a portable native atomic-write/replace primitive with explicit flush and permission semantics. This would let Kennel address KH-006 without shell-specific durability logic. Kennel does not require this change for current supported behavior.
+- None. The audited Kujo 1.0 standard-library surface already provides the atomic, private-file, permission, rename, and deletion primitives needed to close KH-006 inside Kennel.
 
 ## Remaining Work
 
 - **P0:** none demonstrated in the audited scope.
 - **P1:** none with sufficient evidence for safe implementation in this pass.
-- **P2:** replace remaining guarded shell filesystem operations with native Kujo operations when equivalent recursive-copy/atomic-replace semantics exist.
+- **P2:** no unresolved issue; remaining Git and recursive-copy commands are compatibility-preserving external integrations without a native equivalent contract.
 - **P3:** no cosmetic churn recommended.
-- **Needs more evidence:** crash-safe manifest/lock/token writes; bounded parallel install; cross-invocation metadata caching; large-graph performance budgets.
+- **Needs more evidence:** bounded parallel install, cross-invocation metadata caching, and large-graph performance budgets are hypotheses rather than validated issues.
 - **Not worth changing:** compatibility shims, explicit failure-triage output in verification fixtures, and split contract suites remain intentional contract surfaces.
 
 ## Verification Receipt
@@ -113,7 +124,9 @@ Baseline and targeted commands:
 | `bash scripts/verify-all.sh core` | 0 | Blocking baseline; passed. |
 | `bash scripts/benchmark-harness.sh` | 0 | Measurement; artifact was invalid JSON before the fix. |
 | `python3 -m json.tool .kennel_tmp/benchmarks/baseline-results.json` | 1 | Diagnostic baseline; exposed KH-004. |
-| `kujo test-run -v tests/contracts/cli-and-core-contract_tests.kujo` | 0 | Blocking targeted regression suite; 28/28 passed after changes. |
+| `kujo test-run -v tests/contracts/cli-and-core-contract_tests.kujo` | 0 | Blocking targeted regression suite; 29/29 passed after changes. |
+| `kujo test-run -v tests/contracts/hosted-registry-contract_tests.kujo` | 0 | Blocking targeted registry suite; 18/18 passed after changes. |
+| `kujo test-run tests/kennel_contract_tests.kujo` | 0 | Blocking aggregate contract suite; 34/34 passed after changes. |
 | `bash scripts/verify-contract-suites.sh` | 0 | Blocking; all split contracts passed. |
 | `bash scripts/verify-security-regression-suite.sh` | 0 | Blocking security gate; passed. |
 | `bash scripts/verify-atomicity.sh` | 0 | Blocking state gate; passed. |
@@ -121,5 +134,9 @@ Baseline and targeted commands:
 | `bash scripts/verify-benchmark-harness.sh` | 0 | Blocking artifact contract; valid JSON parsed and checked. |
 | `bash scripts/benchmark-harness.sh` | 0 | Post-change measurement; valid output at `.kennel_tmp/benchmarks/post-results.json`. |
 | `bash scripts/verify-shell-quality.sh` | 0 | Blocking syntax gate; Bash syntax passed; local ShellCheck unavailable and was explicitly skipped by the repository script. |
+| `bash scripts/verify-atomic-persistence.sh` | 0 | Blocking persistence ratchet; atomic/private primitives are wired and direct persistent `write_file` calls are absent. |
+| `bash scripts/verify-profiles.sh stage3` | 0 | Blocking hosted-registry profile; passed. |
+| `bash scripts/verify-all.sh all` | 0 | Blocking full repository verification; passed. |
+| Adjacent five-iteration benchmark, `6f9f81f` vs updated tree | 0 / 0 | Performance comparison; all operations remained within the 15% review threshold. |
 
-The final full-profile, push, clean-tree, and exact final-SHA results are recorded in the final engineering receipt because they occur after this report is committed.
+Push, clean-tree, and exact final-SHA results are recorded in the final engineering receipt because they occur after this report is committed.

@@ -17,67 +17,20 @@ It is intentionally implementation-focused and organized by priority.
 
 ## P0: Reliability and Security
 
-1. Add atomic write safety for manifest and lockfile updates.
-
-- Evidence:
-	- Command-level rollback now restores paired manifest/lockfile state after a handled write failure.
-	- `save_manifest` and `save_lockfile` still overwrite their target files directly, so process or machine termination during a write can leave a partial file.
-- Outcome:
-	- Temp-file write, flush, and atomic rename on supported platforms.
-	- Preserve the existing command-level rollback behavior for handled failures.
-
-2. Remove shell-based destructive file operations from installer paths.
-
-- Evidence:
-	- Installer replacement uses guarded shell `mv`, `rm`, and `cp` operations.
-	- Failed replacements now restore the displaced package, and successful replacements delete temporary trash, but safe native filesystem operations would reduce shell dependence further.
-- Outcome:
-	- Replace with safe Kujo-native file operations or strict guardrails.
-	- Explicit path safety checks for install targets.
-
-3. Add crash-safe token-store persistence.
-
-- Evidence:
-	- Token-store writes apply restrictive permissions and fail closed on malformed state.
-	- The store file is still overwritten directly rather than replaced atomically.
-- Outcome:
-	- Atomic replace without any interval in which a partially written credential store can be observed.
-	- Preserve mode `0600` across create and replacement flows.
+No open P0 finding remains in the current launch-safe scope.
 
 ## Recently Completed Safeguards
 
 - Central identifier validation rejects unsafe package, registry, user, and alias values before filesystem or registry operations.
 - Trust validation enforces canonical checksum algorithms/digest lengths, base64 signature shape, safe signing-key shape, and distinct malformed/missing/mismatch diagnostics.
 - Installer replacement restores the previous package after a failed copy/clone/checkout and removes temporary displaced-package data after success.
+- Manifest, lockfile, registry metadata, rollback restoration, and generated scaffold files use Kujo's synced same-directory atomic replacement primitive.
+- Token-store replacement creates verified mode-`0600` temporary content and atomically renames it into place.
+- Installer displacement, restoration, recursive deletion, and empty-directory cleanup use native Kujo filesystem operations; shell execution remains only where Git or recursive copy semantics require an external tool.
 
 ## P1: DRY and Modular Architecture
 
-1. Extract shared auth context resolution used by hosted-registry commands.
-
-- Evidence:
-	- Repeated token/registry/user/store-path setup and token lookup in:
-		- `command_publish`
-		- `command_yank`
-		- `command_access`
-		- `command_visibility`
-		- `command_api_search`
-		- `command_api_metadata`
-		- `command_install_hosted`
-	- All in `kennel.kujo`.
-- Outcome:
-	- Single helper for auth context and registry-dir resolution.
-	- Lower regression risk when auth behavior changes.
-
-2. Split command orchestration from command implementation.
-
-- Evidence:
-	- `kennel.kujo` contains parsing, workflow orchestration, and command internals in one file.
-- Outcome:
-	- Move hosted-registry command logic into dedicated module.
-	- Move dependency lifecycle command logic into dedicated module.
-	- Keep `kennel.kujo` as thin routing layer.
-
-3. Break large resolver/registry module into focused units.
+1. Break the remaining large resolver/registry module into focused units.
 
 - Evidence:
 	- `future_resolvers.kujo` currently owns static index lookup, auth token store, publish/yank/access/visibility, hosted API behavior, and trust verification.
@@ -90,7 +43,7 @@ It is intentionally implementation-focused and organized by priority.
 
 - Evidence:
 	- `rebuild_lockfile_from_manifest` resolves and reinstalls every dependency in sequence.
-	- Called after add/remove and fallback install paths in `kennel.kujo`.
+	- Called after add/remove and fallback install paths in `src/commands_dependency.kujo`.
 - Outcome:
 	- Incremental lock updates when safe.
 	- Full rebuild only when required.
@@ -121,32 +74,11 @@ It is intentionally implementation-focused and organized by priority.
 	- Faster root-cause isolation.
 	- Easier ownership and maintenance of test domains.
 
-2. Add explicit failure atomicity tests.
-
-- Outcome:
-	- Verify manifest and lockfile remain consistent when install/resolve/publish steps fail mid-flight.
-
-3. Add unified verification runner.
-
-- Evidence:
-	- 24 scripts under `scripts/` with overlapping setup patterns.
-- Outcome:
-	- One orchestrator script to run targeted capability groups.
-	- Keep individual scripts as leaf checks.
+2. Continue expanding abrupt-termination and recovery drills beyond the atomic primitive's repository-owned contract coverage.
 
 ## P2: Cleanup and Naming Consistency
 
-1. Remove legacy maturity wording from runtime defaults and help text.
-
-- Evidence:
-	- `manifest.kujo` default package status uses legacy maturity strings.
-	- `cli.kujo` and `kennel.kujo` help/warning output still includes legacy maturity phrasing.
-	- Test naming and language across `tests/contracts/*.kujo` can still be tightened for production terminology consistency.
-- Outcome:
-	- Production-forward default metadata and help output.
-	- Terminology aligned across code, tests, and docs.
-
-2. Rename legacy verification script naming.
+1. Rename legacy verification script naming.
 
 - Evidence:
 	- Many scripts still use legacy milestone naming in `scripts/`.
@@ -154,7 +86,7 @@ It is intentionally implementation-focused and organized by priority.
 	- Capability-based names (auth, publish, trust, api, permissions, lockfile, diagnostics).
 	- Cleaner entry points for CI and contributor workflows.
 
-3. Revisit ignore rules and tracked docs expectations.
+2. Revisit ignore rules and tracked docs expectations.
 
 - Evidence:
 	- `.gitignore` includes `docs/full-delivery-checklist.md`.
@@ -163,11 +95,10 @@ It is intentionally implementation-focused and organized by priority.
 
 ## Suggested Execution Order
 
-1. P0 reliability and security items.
-2. Shared-helper extraction and command/module split.
-3. Lockfile/install performance work and cache strategy.
-4. Test suite refactor and runner consolidation.
-5. Naming and cleanup pass.
+1. Evidence-backed lockfile/install performance work and cache strategy.
+2. Remaining registry-module split.
+3. Test suite refinements.
+4. Naming and cleanup pass.
 
 ## Definition Of Done For This Backlog
 
