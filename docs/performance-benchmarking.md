@@ -66,4 +66,5 @@ Stage 1 CI runs the benchmark harness in dry-run mode through:
 
 - `scripts/verify-benchmark-harness.sh`
 
-This keeps CI deterministic and low-cost while validating script/output contract stability.
+This keeps CI deterministic and low-cost while parsing the generated JSON and validating
+its schema-critical fields, operation set, and numeric result types.

@@ -53,7 +53,7 @@ append_operation_json() {
 	if [ "$operation_count" -gt 0 ]; then
 		printf ',\n' >>"$OPERATIONS_FILE"
 	fi
-	printf '%s' "$operation_json" >>"$OPERATIONS_FILE"
+	printf '%b' "$operation_json" >>"$OPERATIONS_FILE"
 	operation_count=$((operation_count + 1))
 }
 

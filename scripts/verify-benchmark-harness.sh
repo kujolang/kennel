@@ -17,21 +17,26 @@ if [ ! -f "$OUTPUT_PATH" ]; then
 	exit 1
 fi
 
-required_patterns=(
-	'"schema_version": "1.0"'
-	'"dry_run": 1'
-	'"name":"install"'
-	'"name":"update"'
-	'"name":"api-search"'
-	'"name":"api-metadata"'
-	'"max_regression_percent": 15'
-)
+python3 - "$OUTPUT_PATH" <<'PY'
+import json
+import sys
 
-for pattern in "${required_patterns[@]}"; do
-	if ! grep -Fq -- "$pattern" "$OUTPUT_PATH"; then
-		echo "[verify-benchmark-harness] missing required benchmark field: $pattern"
-		exit 1
-	fi
-done
+output_path = sys.argv[1]
+with open(output_path, encoding="utf-8") as handle:
+    report = json.load(handle)
+
+assert report["schema_version"] == "1.0"
+assert report["dry_run"] == 1
+assert report["thresholds"]["max_regression_percent"] == 15
+
+expected_operations = {"install", "update", "api-search", "api-metadata"}
+operations = report["operations"]
+assert {operation["name"] for operation in operations} == expected_operations
+for operation in operations:
+    assert isinstance(operation["durations_ms"], list)
+    assert isinstance(operation["avg_ms"], int)
+    assert isinstance(operation["min_ms"], int)
+    assert isinstance(operation["max_ms"], int)
+PY
 
 echo "[verify-benchmark-harness] success"

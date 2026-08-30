@@ -150,11 +150,15 @@ test "ref classification only treats semantic versions as versions" {
 test "installer cleanup removes excluded directories instead of retaining hidden trash" {
 	tmp_root := "/tmp/kennel-installer-cleanup-contract"
 	source_dir := tmp_root + "/source"
+	next_source_dir := tmp_root + "/source-next"
 	execute_status("rm -rf '" + tmp_root + "'")
-	execute_status("mkdir -p '" + source_dir + "/node_modules' '" + source_dir + "/dist'")
+	execute_status("mkdir -p '" + source_dir + "/node_modules' '" + source_dir + "/dist' '" + next_source_dir + "'")
 	write_file(source_dir + "/kennel.toml", "[package]\nname = \"source\"\nversion = \"0.1.0\"\n", true)
 	write_file(source_dir + "/node_modules/dependency.txt", "excluded", true)
 	write_file(source_dir + "/dist/artifact.txt", "excluded", true)
+	write_file(source_dir + "/generation.txt", "original", true)
+	write_file(next_source_dir + "/kennel.toml", "[package]\nname = \"source\"\nversion = \"0.2.0\"\n", true)
+	write_file(next_source_dir + "/generation.txt", "replacement", true)
 
 	result := install_resolved(tmp_root, {
 		"name": "clean-source",
@@ -172,6 +176,37 @@ test "installer cleanup removes excluded directories instead of retaining hidden
 	assert_equal(path_exists(install_path + "/node_modules"), false)
 	assert_equal(path_exists(install_path + "/dist"), false)
 	assert_equal(path_exists(install_path + "/.kennel_installer_trash"), false)
+	assert_equal(path_exists(tmp_root + "/kennel_packages/.kennel_installer_trash"), false)
+
+	replacement := install_resolved(tmp_root, {
+		"name": "clean-source",
+		"kind": "path",
+		"source": "file:" + next_source_dir,
+		"requested": "",
+		"requested_kind": "none",
+		"resolved_ref": "local",
+		"resolved_commit": "",
+		"url": "",
+		"path": next_source_dir
+	})
+	assert_equal(replacement["ok"], true)
+	assert_equal(read_file(install_path + "/generation.txt"), "replacement")
+	assert_equal(path_exists(tmp_root + "/kennel_packages/.kennel_installer_trash"), false)
+
+	failed_replacement := install_resolved(tmp_root, {
+		"name": "clean-source",
+		"kind": "path",
+		"source": "file:" + tmp_root + "/missing-source",
+		"requested": "",
+		"requested_kind": "none",
+		"resolved_ref": "local",
+		"resolved_commit": "",
+		"url": "",
+		"path": tmp_root + "/missing-source"
+	})
+	assert_equal(failed_replacement["ok"], false)
+	assert_equal(read_file(install_path + "/generation.txt"), "replacement")
+	assert_equal(path_exists(tmp_root + "/kennel_packages/.kennel_installer_trash"), false)
 
 	execute_status("rm -rf '" + tmp_root + "'")
 }
@@ -283,6 +318,33 @@ test "installer rejects unsafe package install names before local copy" {
 	assert_equal(result["ok"], false)
 	assert_true(index_of(to_string(result["error"]), "unsafe path") >= 0)
 	assert_equal(path_exists(tmp_root + "/escape"), false)
+
+	execute_status("rm -rf '" + tmp_root + "'")
+}
+
+test "installer rejects symlinked package roots" {
+	tmp_root := "/tmp/kennel-installer-symlink-root-contract"
+	project_dir := tmp_root + "/project"
+	source_dir := tmp_root + "/source"
+	outside_dir := tmp_root + "/outside"
+	execute_status("rm -rf '" + tmp_root + "'")
+	execute_status("mkdir -p '" + project_dir + "' '" + source_dir + "' '" + outside_dir + "'")
+	execute_status("ln -s '" + outside_dir + "' '" + project_dir + "/kennel_packages'")
+	write_file(source_dir + "/kennel.toml", "[package]\nname = \"source\"\nversion = \"0.1.0\"\n", true)
+
+	result := install_resolved(project_dir, {
+		"name": "linked-root-source",
+		"kind": "path",
+		"source": "file:" + source_dir,
+		"requested": "",
+		"requested_kind": "none",
+		"resolved_ref": "local",
+		"resolved_commit": "",
+		"url": "",
+		"path": source_dir
+	})
+	assert_equal(result["ok"], false)
+	assert_equal(path_exists(outside_dir + "/linked-root-source"), false)
 
 	execute_status("rm -rf '" + tmp_root + "'")
 }

@@ -18,10 +18,16 @@ func is_safe_install_path(path) {
 	if ends_with(text, "/kennel_packages") {
 		return false
 	}
+	marker := "/kennel_packages/"
+	marker_index := index_of(text, marker)
+	packages_root := substring(text, 0, marker_index + len(marker) - 1)
+	if path_exists(packages_root) && path_is_symlink(packages_root) {
+		return false
+	}
 	return true
 }
 
-func remove_path(path) {
+func delete_install_path(path) {
 	if trim(path) == "" {
 		return true
 	}
@@ -31,12 +37,99 @@ func remove_path(path) {
 	if is_safe_install_path(path) == false {
 		return false
 	}
+	result := run_shell("rm -rf -- " + shell_quote(path))
+	return command_ok(result)
+}
+
+func displace_install_path(path) {
+	if trim(path) == "" || path_exists(path) == false {
+		return {
+			"ok": true,
+			"trash_path": ""
+		}
+	}
+	if is_safe_install_path(path) == false {
+		return {
+			"ok": false,
+			"trash_path": ""
+		}
+	}
 	parent_dir := parent_dir_path(path)
 	trash_root := parent_dir + "/.kennel_installer_trash"
 	ensure_dir(trash_root)
 	trash_path := trash_root + "/" + path_basename(path) + "-" + to_string(now())
 	result := run_shell("mv " + shell_quote(path) + " " + shell_quote(trash_path))
-	return command_ok(result)
+	return {
+		"ok": command_ok(result),
+		"trash_path": trash_path
+	}
+}
+
+func discard_displaced_path(displacement) {
+	trash_path := trim(to_string(dict_get_or(displacement, "trash_path", "")))
+	if trash_path == "" || path_exists(trash_path) == false {
+		return true
+	}
+	if delete_install_path(trash_path) == false {
+		return false
+	}
+	trash_root := parent_dir_path(trash_path)
+	if is_safe_install_path(trash_root) {
+		run_shell("rmdir " + shell_quote(trash_root))
+	}
+	return true
+}
+
+func restore_displaced_path(install_path, displacement) {
+	trash_path := trim(to_string(dict_get_or(displacement, "trash_path", "")))
+	if delete_install_path(install_path) == false {
+		return false
+	}
+	if trash_path == "" || path_exists(trash_path) == false {
+		return true
+	}
+	restore_result := run_shell("mv " + shell_quote(trash_path) + " " + shell_quote(install_path))
+	if command_ok(restore_result) == false {
+		return false
+	}
+	trash_root := parent_dir_path(trash_path)
+	if is_safe_install_path(trash_root) {
+		run_shell("rmdir " + shell_quote(trash_root))
+	}
+	return true
+}
+
+func replacement_failure(install_path, displacement, message) {
+	restored := restore_displaced_path(install_path, displacement)
+	recovery_suffix := ""
+	if restored == false {
+		recovery_suffix = " Existing installation recovery also failed."
+	}
+	return {
+		"ok": false,
+		"error": message + recovery_suffix
+	}
+}
+
+func finalize_replacement(install_path, displacement) {
+	if discard_displaced_path(displacement) {
+		return {
+			"ok": true
+		}
+	}
+	return replacement_failure(install_path, displacement, "Failed to finalize replacement of existing install directory: " + install_path)
+}
+
+func remove_path(path) {
+	displacement := displace_install_path(path)
+	if displacement["ok"] == false {
+		return false
+	}
+	if discard_displaced_path(displacement) {
+		return true
+	}
+	restore_displaced_path(path, displacement)
+	return false
 }
 
 func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
@@ -46,7 +139,8 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
 			"error": "Refusing to install package into unsafe path: " + install_path
 		}
 	}
-	if remove_path(install_path) == false {
+	displacement := displace_install_path(install_path)
+	if displacement["ok"] == false {
 		return {
 			"ok": false,
 			"error": "Failed to clear existing install directory: " + install_path
@@ -58,27 +152,22 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
 	}
 	clone_result := run_shell(clone_cmd)
 	if command_ok(clone_result) == false {
-		return {
-			"ok": false,
-			"error": "Failed to clone " + url + ": " + trim(clone_result.stderr)
-		}
+		return replacement_failure(install_path, displacement, "Failed to clone " + url + ": " + trim(clone_result.stderr))
 	}
 	if resolved_commit != "" {
 		checkout_cmd := "git -C " + shell_quote(install_path) + " checkout " + shell_quote(resolved_commit)
 		checkout_result := run_shell(checkout_cmd)
 		if command_ok(checkout_result) == false {
-			return {
-				"ok": false,
-				"error": "Failed to checkout commit " + resolved_commit + ": " + trim(checkout_result.stderr)
-			}
+			return replacement_failure(install_path, displacement, "Failed to checkout commit " + resolved_commit + ": " + trim(checkout_result.stderr))
 		}
 	}
 	rev_parse := run_shell("git -C " + shell_quote(install_path) + " rev-parse HEAD")
 	if command_ok(rev_parse) == false {
-		return {
-			"ok": false,
-			"error": "Failed to read resolved commit for " + url
-		}
+		return replacement_failure(install_path, displacement, "Failed to read resolved commit for " + url)
+	}
+	finalized := finalize_replacement(install_path, displacement)
+	if finalized["ok"] == false {
+		return finalized
 	}
 	return {
 		"ok": true,
@@ -93,7 +182,8 @@ func copy_local_package(path, install_path) {
 			"error": "Refusing to install package into unsafe path: " + install_path
 		}
 	}
-	if remove_path(install_path) == false {
+	displacement := displace_install_path(install_path)
+	if displacement["ok"] == false {
 		return {
 			"ok": false,
 			"error": "Failed to clear existing install directory: " + install_path
@@ -103,14 +193,15 @@ func copy_local_package(path, install_path) {
 	ensure_dir(parent_dir)
 	git_clone := run_shell("git clone " + shell_quote(path) + " " + shell_quote(install_path))
 	if command_ok(git_clone) == false {
-		tar_cmd := "mkdir -p " + shell_quote(install_path) + " && tar -C " + shell_quote(path) + " -cf - . | tar -C " + shell_quote(install_path) + " -xf -"
-		result := run_shell(tar_cmd)
+		copy_cmd := "mkdir -p " + shell_quote(install_path) + " && cp -R " + shell_quote(path + "/.") + " " + shell_quote(install_path + "/")
+		result := run_shell(copy_cmd)
 		if command_ok(result) == false {
-			return {
-				"ok": false,
-				"error": "Failed to copy local package from " + path + ": " + trim(result.stderr)
-			}
+			return replacement_failure(install_path, displacement, "Failed to copy local package from " + path + ": " + trim(result.stderr))
 		}
+	}
+	finalized := finalize_replacement(install_path, displacement)
+	if finalized["ok"] == false {
+		return finalized
 	}
 	return {
 		"ok": true,
