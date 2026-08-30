@@ -20,38 +20,35 @@ It is intentionally implementation-focused and organized by priority.
 1. Add atomic write safety for manifest and lockfile updates.
 
 - Evidence:
-	- `command_add` writes manifest before install and lock regeneration in `kennel.kujo`.
-	- A failed install or rebuild after manifest write can leave partial state.
+	- Command-level rollback now restores paired manifest/lockfile state after a handled write failure.
+	- `save_manifest` and `save_lockfile` still overwrite their target files directly, so process or machine termination during a write can leave a partial file.
 - Outcome:
-	- No partial write state after command failure.
-	- Safe rollback or restore behavior for add/remove/update paths.
+	- Temp-file write, flush, and atomic rename on supported platforms.
+	- Preserve the existing command-level rollback behavior for handled failures.
 
 2. Remove shell-based destructive file operations from installer paths.
 
 - Evidence:
-	- Installer cleanup uses shell `mv` into `.kennel_installer_trash`.
-	- Local copy fallback uses shell `tar`.
-	- Unsafe install names are now rejected before clone/copy, but the implementation still depends on guarded shell operations.
+	- Installer replacement uses guarded shell `mv`, `rm`, and `cp` operations.
+	- Failed replacements now restore the displaced package, and successful replacements delete temporary trash, but safe native filesystem operations would reduce shell dependence further.
 - Outcome:
 	- Replace with safe Kujo-native file operations or strict guardrails.
 	- Explicit path safety checks for install targets.
 
-3. Add strict identifier validation for registry/user/package inputs.
+3. Add crash-safe token-store persistence.
 
 - Evidence:
-	- Command handlers accept and pass through names broadly in `kennel.kujo`.
+	- Token-store writes apply restrictive permissions and fail closed on malformed state.
+	- The store file is still overwritten directly rather than replaced atomically.
 - Outcome:
-	- Central validator for allowed patterns.
-	- Early, consistent command failure for invalid input.
+	- Atomic replace without any interval in which a partially written credential store can be observed.
+	- Preserve mode `0600` across create and replacement flows.
 
-4. Strengthen trust policy semantics beyond string equality.
+## Recently Completed Safeguards
 
-- Evidence:
-	- `verify_package_signature` compares string fields directly in `future_resolvers.kujo`.
-- Outcome:
-	- Enforce canonical checksum format (algorithm + digest).
-	- Validate signature payload format and signing key shape.
-	- Add failure diagnostics that distinguish malformed vs mismatch.
+- Central identifier validation rejects unsafe package, registry, user, and alias values before filesystem or registry operations.
+- Trust validation enforces canonical checksum algorithms/digest lengths, base64 signature shape, safe signing-key shape, and distinct malformed/missing/mismatch diagnostics.
+- Installer replacement restores the previous package after a failed copy/clone/checkout and removes temporary displaced-package data after success.
 
 ## P1: DRY and Modular Architecture
 

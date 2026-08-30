@@ -131,13 +131,12 @@ Name-based package operations (`add <name>`, `info <name>`, and `search <query>`
 The following areas are intentionally out of launch-safe scope for now:
 
 - public package discovery
-- hosted registry workflows
-- package publishing
 - package directory browsing
-- accounts/auth for hosted mutation flows
+- an operated, multi-tenant public registry service
+- internet-scale account recovery and abuse handling
 - moderation and malware scanning
 - trust scoring
-- package signing
+- service-backed package signing and provenance verification
 
 ## Validation and Release Gates
 
