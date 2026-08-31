@@ -79,7 +79,9 @@ grep -q 'checksum = "sha256:1111111111111111111111111111111111111111111111111111
 grep -q 'signature = "c2lnbmVkLWxpYi0wMTA="' "$CONSUMER_DIR/kennel.lock"
 grep -q 'signing_key = "key.signed-lib-010"' "$CONSUMER_DIR/kennel.lock"
 
-sed -i '' 's/signature = "c2lnbmVkLWxpYi0wMTA="/signature = "c2lnLW1pc21hdGNo"/' "$CONSUMER_DIR/kennel.toml"
+trust_update_path="$CONSUMER_DIR/kennel.toml.next"
+sed 's/signature = "c2lnbmVkLWxpYi0wMTA="/signature = "c2lnLW1pc21hdGNo"/' "$CONSUMER_DIR/kennel.toml" >"$trust_update_path"
+mv "$trust_update_path" "$CONSUMER_DIR/kennel.toml"
 
 mismatch_output="$TMP_DIR/install-mismatch.out"
 if "$KUJO_BIN" run "$KENNEL_SCRIPT" --interpreter -- install --project-dir "$CONSUMER_DIR" >"$mismatch_output" 2>&1; then
