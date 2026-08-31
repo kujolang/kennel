@@ -108,6 +108,9 @@ jobs:
           name: kujo-runtime-linux
           path: kujo-bin
 
+      - name: Make Kujo binary executable
+        run: chmod +x kujo-bin/kujo
+
       - name: Run Stage 1 contract tests
         env:
           KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
@@ -171,6 +174,9 @@ jobs:
         with:
           name: kujo-runtime-linux
           path: kujo-bin
+
+      - name: Make Kujo binary executable
+        run: chmod +x kujo-bin/kujo
 
       - name: Run stage profile critical gates
         env:

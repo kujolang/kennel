@@ -20,6 +20,8 @@ required_patterns=(
 	"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
 	"actions/download-artifact@v4"
 	"name: kujo-runtime-linux"
+	"Make Kujo binary executable"
+	"chmod +x kujo-bin/kujo"
 	"needs: build-kujo-runtime"
 	"static-script-quality"
 	"macos-smoke"
@@ -75,6 +77,12 @@ fi
 toolchain_count="$(grep -Fc 'toolchain: stable' "$WORKFLOW_FILE")"
 if [[ "$toolchain_count" -ne 2 ]]; then
 	echo "[verify-stage-1-ci-workflow] expected exactly 2 explicit stable Rust toolchain inputs, found: $toolchain_count"
+	exit 1
+fi
+
+executable_restore_count="$(grep -Fc 'chmod +x kujo-bin/kujo' "$WORKFLOW_FILE")"
+if [[ "$executable_restore_count" -ne 2 ]]; then
+	echo "[verify-stage-1-ci-workflow] expected exactly 2 downloaded Kujo executable-mode restorations, found: $executable_restore_count"
 	exit 1
 fi
 
