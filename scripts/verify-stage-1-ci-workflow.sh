@@ -16,6 +16,7 @@ required_patterns=(
 	"build-kujo-runtime"
 	"actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
 	"dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9"
+	"toolchain: stable"
 	"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
 	"actions/download-artifact@v4"
 	"name: kujo-runtime-linux"
@@ -68,6 +69,12 @@ done
 build_count="$(grep -Fc 'run: cargo build --release --bin kujo' "$WORKFLOW_FILE")"
 if [ "$build_count" -ne 2 ]; then
 	echo "[verify-stage-1-ci-workflow] expected exactly 2 Kujo build steps (shared Linux + macOS), found: $build_count"
+	exit 1
+fi
+
+toolchain_count="$(grep -Fc 'toolchain: stable' "$WORKFLOW_FILE")"
+if [[ "$toolchain_count" -ne 2 ]]; then
+	echo "[verify-stage-1-ci-workflow] expected exactly 2 explicit stable Rust toolchain inputs, found: $toolchain_count"
 	exit 1
 fi
 

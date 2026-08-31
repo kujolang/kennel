@@ -19,6 +19,7 @@ required_patterns=(
 	"bash ./scripts/verify-profiles.sh full"
 	"actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
 	"dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9"
+	"toolchain: stable"
 	"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
 	"if: always()"
 	"nightly-full-regression-artifacts"
