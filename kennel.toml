@@ -1,6 +1,6 @@
 [package]
 name = "kennel"
-version = "1.0.0"
+version = "1.0.1"
 description = "Production-focused package manager for Kujo projects with deterministic dependency operations and hosted-registry workflows."
 license = "MIT"
 authors = ["Kujolang <contact@kujolang.ai>"]

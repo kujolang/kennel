@@ -1,6 +1,6 @@
 # Kennel
 
-[![Version](https://img.shields.io/badge/version-1.0.0-black)](https://github.com/kujolang/kennel)
+[![Version](https://img.shields.io/badge/version-1.0.1-black)](https://github.com/kujolang/kennel)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
 
