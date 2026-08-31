@@ -36,7 +36,9 @@ fi
 
 grep -q 'Only package owners can manage access' "$bob_access_output"
 
-sed -i '' 's/version = "0.1.0"/version = "0.1.1"/' "$PROJECT_DIR/kennel.toml"
+version_update_path="$PROJECT_DIR/kennel.toml.next"
+sed 's/version = "0.1.0"/version = "0.1.1"/' "$PROJECT_DIR/kennel.toml" >"$version_update_path"
+mv "$version_update_path" "$PROJECT_DIR/kennel.toml"
 
 bob_publish_output="$TMP_DIR/bob-publish.out"
 if "$KUJO_BIN" run "$KENNEL_SCRIPT" --interpreter -- publish --registry hosted-registry --user bob --store-path "$BOB_STORE" --registry-dir "$REGISTRY_DIR" --project-dir "$PROJECT_DIR" >"$bob_publish_output" 2>&1; then
