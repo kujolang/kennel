@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Git ref to attest (for example, v1.0.1)
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -19,6 +24,11 @@ jobs:
     steps:
       - name: Checkout kennel
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.release_ref || github.ref }}
+
+      - name: Prepare security artifact directory
+        run: mkdir -p artifacts/security
 
       - name: Generate SBOM (SPDX JSON)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
@@ -26,6 +36,8 @@ jobs:
           path: .
           format: spdx-json
           output-file: artifacts/security/sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
 
       - name: Generate integrity manifest
         run: |
