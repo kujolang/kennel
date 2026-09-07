@@ -1,0 +1,56 @@
+name: Publish official Kennel packages
+on:
+  workflow_call:
+    inputs:
+      package:
+        type: string
+        default: ''
+      release_id:
+        type: string
+        default: ''
+permissions:
+  contents: write
+jobs:
+  publish:
+    # Registry-owned token can write only its own repository. No cross-repo PAT.
+    if: github.repository == 'kujolang/kennel-registry'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: kennel-registry-publication
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: kujolang/kennel-registry
+          ref: main
+          path: registry-repo
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: kujolang/kennel
+          ref: main
+          path: publisher
+          persist-credentials: false
+      - name: Record publisher identity
+        run: |
+          echo "KENNEL_WORKFLOW_SHA=$(git -C publisher rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "KENNEL_WORKFLOW_REF=kujolang/kennel/.github/workflows/publish-kennel-package.yml@$(git -C publisher rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Build from published releases and validate registry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ inputs.package || (github.event_name == 'release' && github.event.repository.name) || '' }}
+          RELEASE_ID: ${{ inputs.release_id || github.event.release.id || '' }}
+        run: python3 publisher/scripts/registry/sync_releases.py --root registry-repo/registry --policy registry-repo/official-packages.json --package "$PACKAGE" --release-id "$RELEASE_ID"
+      - name: Publish one atomic registry commit
+        working-directory: registry-repo
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add registry
+          if ! git diff --cached --quiet; then
+            git commit -m 'Publish verified official package releases'
+            git push origin HEAD:main
+          fi
+      - name: Verify deployed package discovery
+        run: |
+          python3 publisher/scripts/registry/verify_deployment.py registry-repo/registry
