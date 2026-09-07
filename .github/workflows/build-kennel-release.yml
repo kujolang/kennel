@@ -23,11 +23,11 @@ jobs:
       - name: Build exact published release
         env:
           GH_TOKEN: ${{ github.token }}
+          KENNEL_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          KENNEL_WORKFLOW_REF: ${{ github.workflow_ref }}
           PACKAGE: ${{ github.event.repository.name }}
           RELEASE_ID: ${{ github.event.release.id }}
         run: |
-          export KENNEL_WORKFLOW_SHA="$(git -C publisher rev-parse HEAD)"
-          export KENNEL_WORKFLOW_REF="kujolang/kennel/.github/workflows/build-kennel-release.yml@$KENNEL_WORKFLOW_SHA"
           python3 publisher/scripts/registry/sync_releases.py --root release-package --policy registry-policy/official-packages.json --package "$PACKAGE" --release-id "$RELEASE_ID"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

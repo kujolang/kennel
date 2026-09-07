@@ -31,13 +31,11 @@ jobs:
           ref: 25319f2f935526b1bcb249edd3ad769e3248eee0
           path: publisher
           persist-credentials: false
-      - name: Record publisher identity
-        run: |
-          echo "KENNEL_WORKFLOW_SHA=$(git -C publisher rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "KENNEL_WORKFLOW_REF=kujolang/kennel/.github/workflows/publish-kennel-package.yml@$(git -C publisher rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Build from published releases and validate registry
         env:
           GH_TOKEN: ${{ github.token }}
+          KENNEL_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          KENNEL_WORKFLOW_REF: ${{ github.workflow_ref }}
           PACKAGE: ${{ inputs.package || (github.event_name == 'release' && github.event.repository.name) || '' }}
           RELEASE_ID: ${{ inputs.release_id || github.event.release.id || '' }}
         run: python3 publisher/scripts/registry/sync_releases.py --root registry-repo/registry --policy registry-repo/official-packages.json --package "$PACKAGE" --release-id "$RELEASE_ID"
