@@ -1,3 +1,5 @@
+from src.registry_transport import registry_json
+from src.registry_protocol import registry_api_base, registry_identity
 from src.cli_adapter import flag_value, has_flag, positional, print_lines
 from commands_shared import capture_project_state, enforce_source_policy, ensure_project_manifest, find_entry_by_name, index_lookup_paths, load_registry_package_metadata, load_static_index, persist_project_state, print_supported_source_guidance, rebuild_lockfile_from_manifest, require_identifier, resolve_and_install_dependency, resolve_name_based_source, resolution_policy_from_manifest, source_policy_from_manifest, source_policy_with_cli_overrides, trust_policy_from_manifest, update_should_skip
 from dependency_spec import dependency_entry_from_source, parse_source_reference, source_ref_from_dependency_entry
@@ -117,7 +119,7 @@ func command_add(cwd, parsed_cli) {
 		alias_value = require_identifier(alias_value, "Dependency alias")
 	}
 	source_parse := parse_source_reference(source_value)
-	if source_parse["ok"] == false && index_of(source_value, "/") < 0 && index_of(source_value, ":") < 0 {
+	if source_parse["ok"] == false && (index_of(source_value, "/") < 0 || starts_with(source_value, "@")) && index_of(source_value, ":") < 0 {
 		by_name := resolve_name_based_source(cwd, manifest_obj, source_value)
 		if by_name["ok"] == false {
 			print(by_name["error"])
@@ -190,6 +192,10 @@ func command_install(cwd, parsed_cli) {
 			if policy_check["ok"] == false {
 				print(policy_check["error"])
 				exit(1)
+			}
+			if dict_get_or(entry, "kind", "") == "registry" {
+				preflight := verify_package_signature(entry, trust_policy)
+				if preflight["ok"] == false { print(preflight["error"]); exit(1) }
 			}
 			install_result := install_locked_package(cwd, entry)
 			if install_result["ok"] == false {
@@ -364,6 +370,12 @@ func command_info(cwd, parsed_cli) {
 	if index_lookup["ok"] {
 		index_attempted = true
 		for index_path in index_lookup["paths"] {
+			if starts_with(index_path, "https://") {
+				try {
+					print(to_json(registry_json(registry_api_base(index_path) + "packages/" + registry_identity(target) + ".json")))
+					return
+				} except err { print(to_string(err)); exit(1) }
+			}
 			index_loaded := load_static_index(index_path)
 			if index_loaded["ok"] == false {
 				continue

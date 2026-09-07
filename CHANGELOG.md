@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — static first-party registry
+
+- Native HTTPS registry resolution, verified release archives, safe staging extraction and content-addressed caching.
+- Additive schema-1 lock metadata for exact archives and release provenance.
+- Central deterministic release builder, reusable GitHub Release publication, static Pages registry and historical-release backfill.
+- Remote installation requires Kujo 1.3.1; existing local/source and hosted command contracts are preserved.
+
 ## [1.0.1] - 2026-08-30
 
 - Hardened dependency identifiers, install paths, hosted-registry authorization, and invalid token-store handling.

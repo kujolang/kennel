@@ -1,0 +1,37 @@
+test_setup {
+from src.registry_protocol import registry_identity, registry_request, registry_valid_version, registry_validate_version
+from src.registry_archive import archive_safe_path
+from src.registry_transport import registry_get
+}
+
+
+test "package identities and selectors preserve future scopes" {
+	assert_equal(registry_request("changebucket@1.0.0")["name"], "changebucket")
+	assert_equal(registry_request("@alice/formatter@1.2.3")["selector"], "1.2.3")
+	assert_equal(registry_identity("@acme/tool"), "@acme/tool")
+	for value in ["../evil", "@alice/../evil", "@/evil", "MixedCase", "foo.bar"] {
+		rejected := false
+		try { registry_identity(value) } except err { rejected = true }
+		assert_true(rejected)
+	}
+}
+
+test "strict registry SemVer separates stable and prereleases" {
+	for version in ["1.0.0", "0.0.1", "1.0.0-beta.2"] { assert_true(registry_valid_version(version)) }
+	for version in ["01.0.0", "v1.0.0", "1.0", "1.0.0-01", "1.0.0-", "1.0.0/evil"] { assert_equal(registry_valid_version(version), false) }
+}
+
+test "archive traversal absolute and platform aliases rejected" {
+	for value in ["../evil", "/evil", "x/../evil", "x\\evil", "x:evil", "./evil", "x//y", "CON.txt", "x."] {
+		rejected := false
+		try { archive_safe_path(value) } except err { rejected = true }
+		assert_true(rejected)
+	}
+	assert_equal(archive_safe_path("src/main.kujo"), "src/main.kujo")
+}
+
+test "transport never downgrades to HTTP" {
+	rejected := false
+	try { registry_get("http://example.com/index.json", 1024) } except err { rejected = true }
+	assert_true(rejected)
+}

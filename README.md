@@ -4,9 +4,28 @@
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
 
-Kennel is the official package and project manager for [Kujo](https://github.com/kujolang/kujo/). The current launch-safe scope focuses on deterministic local, source-based, static-index, and local hosted-registry package/project workflows.
+Kennel is the official package and project manager for [Kujo](https://github.com/kujolang/kujo/). It supports deterministic local/source development and immutable first-party package releases through the official static registry.
 
-Public package discovery, an operated hosted registry service, package directory browsing, hosted moderation, malware scanning, and public trust scoring are intentionally deferred until the security, trust, and moderation model is mature.
+Official first-party distribution is available through the versioned HTTPS protocol at `https://kennel.kujolang.ai`. Accounts, third-party publishing, private hosted packages, moderation and public trust scoring remain deferred.
+
+## Official Kennel Registry
+
+Use Kujo **1.3.1 or newer** for native HTTPS archive installation:
+
+```bash
+kennel init --name demo
+kennel add changebucket
+kennel add kennel@1.0.1
+kennel install
+kennel info changebucket
+kennel search change
+```
+
+The CLI form is also available as `kujo run /path/to/kennel/kennel.kujo --interpreter -- add changebucket --project-dir /path/to/demo`. No GitHub URL or login is needed by consumers. Downloads, provenance and cache bytes are verified before staged archive replacement. Exact versions and digests are locked using additive schema-1 fields.
+
+The built-in registry is used when no explicit registry or project `index.json` exists. Set `[registry].index = "https://your-registry.example/api/v1/index.json"` to override it. Existing file/Git dependencies, local static indexes and local hosted auth/publish commands retain their behavior. Official names are unscoped; future third-party identities use `@scope/name`, with publishing still unavailable.
+
+Read [the protocol and trust contract](docs/registry/protocol.md), [audit and implementation spec](docs/registry/audit-and-spec.md), and [publisher runbook](docs/registry/publishing.md). The historical Changebucket 1.0.0 release contains the original ChangeBudget CLI; backfill preserves released code.
 
 ## Why Teams Use Kennel
 
@@ -125,14 +144,13 @@ index = "./registry/index.primary.json"
 mirrors = ["./registry/index.secondary.json", "./registry/index.tertiary.json"]
 ```
 
-Name-based package operations (`add <name>`, `info <name>`, and `search <query>`) evaluate static indexes in configured order (`index` first, then `mirrors`) and stop on the first successful match. Missing files and unsupported remote URLs are skipped with diagnostics so failover remains deterministic.
+Name-based package operations (`add <name>`, `info <name>`, and `search <query>`) evaluate static indexes in configured order (`index` first, then `mirrors`) and stop on the first successful match. Missing local files and HTTP URLs are skipped with diagnostics. HTTPS version-1 registries support anonymous remote resolution; integrity/schema failures fail closed.
 
 ## Deferred Roadmap
 
 The following areas are intentionally out of launch-safe scope for now:
 
-- public package discovery
-- package directory browsing
+- third-party package discovery and publishing
 - an operated, multi-tenant public registry service
 - internet-scale account recovery and abuse handling
 - moderation and malware scanning

@@ -17,3 +17,6 @@ venv/
 .env
 .env.*
 .DS_Store
+
+# Python publisher/test bytecode
+__pycache__/

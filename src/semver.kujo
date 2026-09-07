@@ -1,0 +1,191 @@
+func strip_leading_v(value) {
+	text := trim(to_string(value))
+	if starts_with(text, "v") || starts_with(text, "V") {
+		return substring(text, 1, len(text))
+	}
+	return text
+}
+
+func is_digits(value) {
+	text := trim(to_string(value))
+	if text == "" {
+		return false
+	}
+	idx := 0
+	while idx < len(text) {
+		ch := substring(text, idx, idx + 1)
+		if ch < "0" || ch > "9" {
+			return false
+		}
+		idx = idx + 1
+	}
+	return true
+}
+
+func normalize_numeric_string(value) {
+	text := trim(to_string(value))
+	if text == "" {
+		return "0"
+	}
+	idx := 0
+	while idx < len(text) - 1 && substring(text, idx, idx + 1) == "0" {
+		idx = idx + 1
+	}
+	return substring(text, idx, len(text))
+}
+
+func parse_semver_value(value) {
+	text := strip_leading_v(value)
+	parts := split(text, ".")
+	if len(parts) != 3 {
+		return {
+			"ok": false
+		}
+	}
+	major := normalize_numeric_string(parts[0])
+	minor := normalize_numeric_string(parts[1])
+	patch := normalize_numeric_string(parts[2])
+	if is_digits(major) == false || is_digits(minor) == false || is_digits(patch) == false {
+		return {
+			"ok": false
+		}
+	}
+	return {
+		"ok": true,
+		"major": major,
+		"minor": minor,
+		"patch": patch,
+		"normalized": major + "." + minor + "." + patch
+	}
+}
+
+func compare_numeric_segments(left_value, right_value) {
+	left := normalize_numeric_string(left_value)
+	right := normalize_numeric_string(right_value)
+	if len(left) > len(right) {
+		return 1
+	}
+	if len(left) < len(right) {
+		return -1
+	}
+	if left > right {
+		return 1
+	}
+	if left < right {
+		return -1
+	}
+	return 0
+}
+
+func compare_semver(left_version, right_version) {
+	major_compare := compare_numeric_segments(left_version["major"], right_version["major"])
+	if major_compare != 0 {
+		return major_compare
+	}
+	minor_compare := compare_numeric_segments(left_version["minor"], right_version["minor"])
+	if minor_compare != 0 {
+		return minor_compare
+	}
+	return compare_numeric_segments(left_version["patch"], right_version["patch"])
+}
+
+func semver_range_tokens(range_expr) {
+	raw := replace(trim(to_string(range_expr)), ",", " ")
+	if raw == "" {
+		return []
+	}
+	parts := split(raw, " ")
+	tokens := []
+	for part in parts {
+		token := trim(to_string(part))
+		if token != "" {
+			tokens := push(tokens, token)
+		}
+	}
+	return tokens
+}
+
+func semver_satisfies_token(version_obj, token_value) {
+	token := trim(to_string(token_value))
+	if token == "" || token == "*" {
+		return true
+	}
+	operator := "="
+	operand := token
+	if starts_with(token, ">=") || starts_with(token, "<=") {
+		operator = substring(token, 0, 2)
+		operand = substring(token, 2, len(token))
+	} else if starts_with(token, ">") || starts_with(token, "<") || starts_with(token, "=") || starts_with(token, "^") || starts_with(token, "~") {
+		operator = substring(token, 0, 1)
+		operand = substring(token, 1, len(token))
+	}
+	base_version := parse_semver_value(operand)
+	if base_version["ok"] == false {
+		return false
+	}
+	cmp := compare_semver(version_obj, base_version)
+	if operator == ">=" {
+		return cmp >= 0
+	}
+	if operator == ">" {
+		return cmp > 0
+	}
+	if operator == "<=" {
+		return cmp <= 0
+	}
+	if operator == "<" {
+		return cmp < 0
+	}
+	if operator == "~" {
+		if compare_numeric_segments(version_obj["major"], base_version["major"]) != 0 {
+			return false
+		}
+		if compare_numeric_segments(version_obj["minor"], base_version["minor"]) != 0 {
+			return false
+		}
+		return cmp >= 0
+	}
+	if operator == "^" {
+		if compare_numeric_segments(base_version["major"], "0") == 0 {
+			if compare_numeric_segments(base_version["minor"], "0") == 0 {
+				if compare_numeric_segments(version_obj["major"], "0") != 0 {
+					return false
+				}
+				if compare_numeric_segments(version_obj["minor"], "0") != 0 {
+					return false
+				}
+				return cmp >= 0
+			}
+			if compare_numeric_segments(version_obj["major"], "0") != 0 {
+				return false
+			}
+			if compare_numeric_segments(version_obj["minor"], base_version["minor"]) != 0 {
+				return false
+			}
+			return cmp >= 0
+		}
+		if compare_numeric_segments(version_obj["major"], base_version["major"]) != 0 {
+			return false
+		}
+		return cmp >= 0
+	}
+	return cmp == 0
+}
+
+func semver_satisfies_range(version_obj, range_expr) {
+	tokens := semver_range_tokens(range_expr)
+	if len(tokens) == 0 {
+		return false
+	}
+	for token in tokens {
+		if semver_satisfies_token(version_obj, token) == false {
+			return false
+		}
+	}
+	return true
+}
+
+
+export parse_semver_value := parse_semver_value
+export compare_semver := compare_semver
+export semver_satisfies_range := semver_satisfies_range

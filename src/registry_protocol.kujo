@@ -1,0 +1,205 @@
+from src.registry_transport import OFFICIAL_REGISTRY, registry_json, registry_blob
+from src.semver import parse_semver_value, compare_semver, semver_satisfies_range
+from src.utils import dict_get_or, validate_identifier
+
+export func registry_identity(value) {
+	parts := split(value, "/")
+	if starts_with(value, "@") {
+		if len(parts) != 2 {
+			throw "Scoped package identity must be @scope/name"
+		}
+		parts[0] = substring(parts[0], 1, len(parts[0]))
+	} else if len(parts) != 1 {
+		throw "Invalid package identity"
+	}
+	for part in parts {
+		if part == "" || len(part) > 64 || to_lower(part) != part || validate_identifier(part, "Package identity")["ok"] == false || index_of(part, ".") >= 0 {
+			throw "Invalid package identity: " + value
+		}
+	}
+	return value
+}
+
+export func registry_request(value) {
+	start := 0
+	if starts_with(value, "@") {
+		start = 1
+	}
+	i := start
+	while i < len(value) {
+		if substring(value, i, i + 1) == "@" {
+			return {"name": registry_identity(substring(value, 0, i)), "selector": substring(value, i + 1, len(value))}
+		}
+		i = i + 1
+	}
+	return {"name": registry_identity(value), "selector": ""}
+}
+
+export func registry_api_base(index_url) {
+	if starts_with(index_url, "https://") == false || ends_with(index_url, "/api/v1/index.json") == false {
+		throw "Remote registry index must use HTTPS /api/v1/index.json"
+	}
+	return substring(index_url, 0, len(index_url) - len("index.json"))
+}
+
+func valid_digest(value) {
+	if type(value) != "string" || len(value) != 64 {
+		return false
+	}
+	for ch in split(value, "") {
+		if index_of("0123456789abcdef", ch) < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+export func registry_valid_version(version) {
+	pieces := split(version, "-")
+	stable := parse_semver_value(pieces[0])
+	if stable["ok"] == false || stable["normalized"] != pieces[0] { return false }
+	if len(pieces) == 1 { return true }
+	pre := substring(version, len(pieces[0]) + 1, len(version))
+	for token in split(pre, ".") {
+		if token == "" { return false }
+		numeric := true
+		for ch in split(token, "") {
+			if ch == "" { continue }
+			if index_of("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-", ch) < 0 { return false }
+			if ch < "0" || ch > "9" { numeric = false }
+		}
+		if numeric && len(token) > 1 && starts_with(token, "0") { return false }
+	}
+	return true
+}
+
+export func registry_validate_version(doc, identity, version_url) {
+	if type(doc) != "dict" || dict_get_or(doc, "schema_version", 0) != 1 {
+		throw "Malformed package version schema"
+	}
+	name := registry_identity(identity)
+	actual := to_string(dict_get_or(doc, "package", ""))
+	scope := dict_get_or(doc, "scope", null)
+	if scope != null {
+		actual = "@" + to_string(scope) + "/" + actual
+	}
+	if actual != name {
+		throw "Package identity mismatch"
+	}
+	version := to_string(dict_get_or(doc, "version", ""))
+	if registry_valid_version(version) == false || index_of(version, "/") >= 0 || ends_with(version_url, "/" + identity + "/" + version + ".json") == false {
+		throw "Package version URL mismatch"
+	}
+	owner := dict_get_or(doc, "owner", {})
+	if scope == null && (dict_get_or(doc, "official", false) != true || dict_get_or(owner, "type", "") != "organization" || dict_get_or(owner, "id", "") != "kujolang") {
+		throw "Unscoped packages are reserved for official Kujo ownership"
+	}
+	if scope != null && dict_get_or(doc, "official", false) {
+		throw "Scoped packages cannot claim reserved official identity"
+	}
+	for key in ["archive_sha256", "provenance_sha256"] {
+		if valid_digest(dict_get_or(doc, key, "")) == false {
+			throw "Malformed package digest: " + key
+		}
+	}
+	if type(dict_get_or(doc, "archive_size", "")) != "int" || doc["archive_size"] <= 0 || doc["archive_size"] > 8388608 || type(dict_get_or(doc, "file_count", "")) != "int" || doc["file_count"] < 1 || doc["file_count"] > 10000 {
+		throw "Invalid package size/file count"
+	}
+	if len(to_string(dict_get_or(doc, "source_commit", ""))) != 40 || type(dict_get_or(doc, "dependencies", "")) != "dict" {
+		throw "Malformed source commit/dependencies"
+	}
+	marker := index_of(version_url, "/api/v1/packages/")
+	if marker < 0 {
+		throw "Invalid version metadata URL"
+	}
+	origin := substring(version_url, 0, marker)
+	prefix := origin + "/packages/" + identity + "/" + version + "/"
+	for pair in [["archive_url", "package.tar.gz"], ["provenance_url", "provenance.json"], ["checksum_url", "checksums.txt"]] {
+		if dict_get_or(doc, pair[0], "") != prefix + pair[1] {
+			throw "Artifact URL is outside immutable package namespace"
+		}
+	}
+	return doc
+}
+
+export func registry_resolve_name(index_url, request_value, ranges) {
+	request := registry_request(request_value)
+	identity := request["name"]
+	base := registry_api_base(index_url)
+	metadata := registry_json(base + "packages/" + identity + ".json")
+	if dict_get_or(metadata, "name", "") != identity || type(dict_get_or(metadata, "versions", "")) != "array" {
+		throw "Malformed package metadata"
+	}
+	selector := request["selector"]
+	best := ""
+	best_parsed := {}
+	for entry in metadata["versions"] {
+		version := to_string(dict_get_or(entry, "version", ""))
+		if registry_valid_version(version) == false { throw "Malformed registry SemVer" }
+		if dict_get_or(entry, "yanked", false) {
+			continue
+		}
+		if selector != "" && version == selector {
+			best = version
+			break
+		}
+		parsed := parse_semver_value(version)
+		if parsed["ok"] && (selector == "" || ranges && semver_satisfies_range(parsed, selector)) {
+			if best == "" || compare_semver(parsed, best_parsed) > 0 {
+				best = version
+				best_parsed = parsed
+			}
+		}
+	}
+	if best == "" {
+		throw "No available package version matches " + request_value
+	}
+	url := base + "packages/" + identity + "/" + best + ".json"
+	doc := registry_validate_version(registry_json(url), identity, url)
+	return {"ok": true, "index_path": index_url, "parsed": {"ok": true, "kind": "registry", "name": identity, "source": "registry:" + url, "url": url, "requested": best, "requested_kind": "version", "checksum": "sha256:" + doc["archive_sha256"]}}
+}
+
+export func registry_resolve_spec(name, spec) {
+	url := spec["url"]
+	identity := name
+	marker := index_of(url, "/api/v1/packages/")
+	if marker < 0 {
+		throw "Invalid registry version source"
+	}
+	body := substring(url, marker + len("/api/v1/packages/"), len(url))
+	parts := split(body, "/")
+	if len(parts) == 2 {
+		identity = parts[0]
+	} else if len(parts) == 3 {
+		identity = parts[0] + "/" + parts[1]
+	} else {
+		throw "Invalid registry package source"
+	}
+	doc := registry_validate_version(registry_json(url), identity, url)
+	if dict_get_or(spec, "checksum", "") != "" && spec["checksum"] != "sha256:" + doc["archive_sha256"] {
+		throw "Package checksum changed after resolution"
+	}
+	return {"name": name, "kind": "registry", "source": "registry:" + url, "url": url, "requested": doc["version"], "requested_kind": "version", "resolved_ref": doc["version"], "resolved_commit": doc["source_commit"], "path": "", "checksum": "sha256:" + doc["archive_sha256"], "registry": substring(url, 0, marker) + "/api/v1/index.json", "registry_manifest": doc, "package_identity": identity, "provenance_status": "registry-statement-verified"}
+}
+
+export func registry_verify_provenance(doc) {
+	data := registry_blob(doc["provenance_url"], doc["provenance_sha256"], 1048576)
+	provenance := parse_json(decode_charset(data, "utf-8", 1048576))
+	if type(provenance) != "dict" || dict_get_or(provenance, "schema_version", 0) != 1 {
+		throw "Malformed package provenance"
+	}
+	for key in ["package", "version", "archive_sha256", "source_commit", "source_tag", "repository", "repository_id", "release_id"] {
+		if dict_get_or(provenance, key, null) != dict_get_or(doc, key, "") {
+			throw "Package provenance mismatch: " + key
+		}
+	}
+	if doc["official"] && starts_with(to_string(dict_get_or(provenance, "repository", "")), "kujolang/") == false {
+		throw "Official package requires Kujo repository provenance"
+	}
+	for key in ["workflow_run", "workflow_ref", "workflow_sha", "published_at"] {
+		if to_string(dict_get_or(provenance, key, "")) == "" {
+			throw "Missing publishing workflow provenance: " + key
+		}
+	}
+	return true
+}

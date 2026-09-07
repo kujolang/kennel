@@ -133,6 +133,9 @@ func parse_source_reference(raw_source) {
 			"error": "Dependency source cannot be empty"
 		}
 	}
+	if starts_with(source, "registry:https://") {
+		return {"ok": true, "kind": "registry", "source": source, "url": substring(source, len("registry:"), len(source)), "name": "package", "requested": "", "requested_kind": "version"}
+	}
 	if starts_with(source, "github:") {
 		return parse_github_source(source)
 	}

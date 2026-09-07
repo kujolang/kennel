@@ -1,3 +1,5 @@
+from src.registry_transport import OFFICIAL_REGISTRY, registry_json
+from src.registry_protocol import registry_resolve_name, registry_identity
 from src.cli_adapter import flag_value, has_flag, print_lines
 from dependency_spec import parse_source_reference, source_ref_from_dependency_entry
 from error_shape import error_result
@@ -34,6 +36,10 @@ func resolve_and_install_dependency(cwd, dep_name, parsed_spec, trust_policy, so
 			"dependency": dep_name,
 			"stage": "resolve"
 		})
+	}
+	if dict_get_or(parsed_spec, "kind", "") == "registry" {
+		preflight := verify_package_signature(resolved_result["resolved"], trust_policy)
+		if preflight["ok"] == false { return preflight }
 	}
 	install_result := install_resolved(cwd, resolved_result["resolved"])
 	if install_result["ok"] == false {
@@ -173,6 +179,9 @@ func enforce_source_policy(dep_name, parsed_spec, source_policy) {
 }
 
 func require_identifier(value, label) {
+	if starts_with(value, "@") && (label == "Dependency name" || label == "Dependency alias") {
+		return registry_identity(value)
+	}
 	validated := validate_identifier(value, label)
 	if validated["ok"] == false {
 		print(validated["error"])
@@ -377,16 +386,16 @@ func index_lookup_paths(cwd, manifest_obj) {
 				"warnings": []
 			}
 		}
-		return error_result("Static index path is not configured. Set `[registry].index` in kennel.toml or place index.json in the project directory.", {
-			"operation": "index_lookup_paths",
-			"cwd": cwd,
-			"stage": "missing_index"
-		})
+		return {"ok": true, "paths": [OFFICIAL_REGISTRY], "warnings": []}
 	}
 	resolved_paths := []
 	warnings := []
 	for configured_index in configured {
-		if starts_with(configured_index, "http://") || starts_with(configured_index, "https://") {
+		if starts_with(configured_index, "https://") {
+			resolved_paths = push(resolved_paths, configured_index)
+			continue
+		}
+		if starts_with(configured_index, "http://") {
 			warnings = push(warnings, "Skipping unsupported remote static index URL: " + configured_index)
 			continue
 		}
@@ -417,6 +426,9 @@ func index_lookup_paths(cwd, manifest_obj) {
 }
 
 func load_static_index(index_path) {
+	if starts_with(index_path, "https://") {
+		try { return {"ok": true, "index": registry_json(index_path)} } except err { return {"ok": false, "error": to_string(err)} }
+	}
 	raw_json := read_file(index_path)
 	try {
 		parsed := parse_json(raw_json)
@@ -533,6 +545,11 @@ func resolve_name_based_source(cwd, manifest_obj, package_name) {
 	index_paths := dict_get_or(lookup, "paths", [])
 	lookup_warnings := dict_get_or(lookup, "warnings", [])
 	for index_path in index_paths {
+		if starts_with(index_path, "https://") {
+			try {
+				return registry_resolve_name(index_path, package_name, resolution_policy_from_manifest(manifest_obj)["semver_ranges"])
+			} except err { return {"ok": false, "error": to_string(err)} }
+		}
 		loaded := load_static_index(index_path)
 		if loaded["ok"] == false {
 			lookup_warnings = push(lookup_warnings, to_string(dict_get_or(loaded, "error", "Failed to load static index.")))
