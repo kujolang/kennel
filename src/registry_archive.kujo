@@ -4,7 +4,7 @@ func tar_text(data, start, count) {
 	end := start
 	while end < start + count && data[end] != 0 {
 		if data[end] < 32 || data[end] > 126 {
-			throw "Archive header contains nonportable characters"
+			throw("Archive header contains nonportable characters")
 		}
 		end = end + 1
 	}
@@ -17,7 +17,7 @@ func tar_octal(data, start, count) {
 	for ch in split(text, "") {
 		if ch == "" { continue }
 		if ch < "0" || ch > "7" {
-			throw "Invalid archive numeric field"
+			throw("Invalid archive numeric field")
 		}
 		value = value * 8 + to_int(ch)
 	}
@@ -26,15 +26,15 @@ func tar_octal(data, start, count) {
 
 export func archive_safe_path(name) {
 	if name == "" || len(name) > 240 || starts_with(name, "/") || index_of(name, "\\") >= 0 || index_of(name, ":") >= 0 {
-		throw "Unsafe archive path: " + name
+		throw("Unsafe archive path: " + name)
 	}
 	for part in split(name, "/") {
 		if part == "" || part == "." || part == ".." || ends_with(part, ".") || ends_with(part, " ") {
-			throw "Unsafe archive path: " + name
+			throw("Unsafe archive path: " + name)
 		}
 		base := to_lower(split(part, ".")[0])
 		if base == "con" || base == "prn" || base == "aux" || base == "nul" || starts_with(base, "com") && len(base) == 4 || starts_with(base, "lpt") && len(base) == 4 {
-			throw "Nonportable archive path: " + name
+			throw("Nonportable archive path: " + name)
 		}
 	}
 	return name
@@ -43,20 +43,21 @@ export func archive_safe_path(name) {
 export func extract_registry_archive(blob, staging, expected_count) {
 	data := gzip_decompress(blob, 67108864)
 	if len(data) < 1024 || len(data) % 512 != 0 {
-		throw "Invalid USTAR archive length"
+		throw("Invalid USTAR archive length")
 	}
 	entries := []
 	seen := {}
 	position := 0
 	terminated := false
+	manifest_found := false
 	while position + 512 <= len(data) {
 		if data[position] == 0 {
 			if len(data) - position < 1024 {
-				throw "Truncated archive terminator"
+				throw("Truncated archive terminator")
 			}
 			while position < len(data) {
 				if data[position] != 0 {
-					throw "Unexpected trailing archive content"
+					throw("Unexpected trailing archive content")
 				}
 				position = position + 1
 			}
@@ -64,7 +65,7 @@ export func extract_registry_archive(blob, staging, expected_count) {
 			break
 		}
 		if tar_text(data, position + 257, 6) != "ustar" || tar_text(data, position + 263, 2) != "00" {
-			throw "Only normalized USTAR packages are supported"
+			throw("Only normalized USTAR packages are supported")
 		}
 		check := 0
 		i := 0
@@ -77,11 +78,11 @@ export func extract_registry_archive(blob, staging, expected_count) {
 			i = i + 1
 		}
 		if check != tar_octal(data, position + 148, 8) {
-			throw "Archive header checksum mismatch"
+			throw("Archive header checksum mismatch")
 		}
 		kind := data[position + 156]
 		if kind != 48 && kind != 0 {
-			throw "Archive links, directories, devices and extension headers are forbidden"
+			throw("Archive links, directories, devices and extension headers are forbidden")
 		}
 		name := tar_text(data, position, 100)
 		prefix := tar_text(data, position + 345, 155)
@@ -89,19 +90,20 @@ export func extract_registry_archive(blob, staging, expected_count) {
 			name = prefix + "/" + name
 		}
 		archive_safe_path(name)
+		if name == "kennel.toml" { manifest_found = true }
 		lower := to_lower(name)
 		if has_key(seen, lower) {
-			throw "Duplicate archive path"
+			throw("Duplicate archive path")
 		}
 		seen[lower] := true
 		mode := tar_octal(data, position + 100, 8)
 		if mode != 420 && mode != 493 {
-			throw "Unsafe archive permissions"
+			throw("Unsafe archive permissions")
 		}
 		size := tar_octal(data, position + 124, 12)
 		start := position + 512
 		if size > 67108864 || start + size > len(data) || len(entries) >= 10000 {
-			throw "Archive size or entry limit exceeded"
+			throw("Archive size or entry limit exceeded")
 		}
 		entries = push(entries, {"name": name, "start": start, "size": size, "mode": mode})
 		position = start + size
@@ -109,12 +111,12 @@ export func extract_registry_archive(blob, staging, expected_count) {
 			position = position + 512 - size % 512
 		}
 	}
-	if terminated == false || len(entries) != expected_count || has_key(seen, "kennel.toml") == false {
-		throw "Archive file count/manifest/termination mismatch"
+	if terminated == false || len(entries) != expected_count || manifest_found == false {
+		throw("Archive file count/manifest/termination mismatch")
 	}
 	# Validate all headers before touching staging. Staging must be new.
 	if path_exists(staging) || (path_exists(staging) && path_is_symlink(staging)) {
-		throw "Archive staging directory already exists"
+		throw("Archive staging directory already exists")
 	}
 	ensure_dir(staging)
 	for entry in entries {
@@ -124,7 +126,7 @@ export func extract_registry_archive(blob, staging, expected_count) {
 		while i < len(parts) - 1 {
 			path = path + "/" + parts[i]
 			if (path_exists(path) && path_is_symlink(path)) || path_is_file(path) {
-				throw "Archive path collision"
+				throw("Archive path collision")
 			}
 			ensure_dir(path)
 			i = i + 1

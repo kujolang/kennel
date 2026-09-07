@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Kennel registry v1 index",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "registry",
+    "packages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "registry": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "scope",
+          "owner",
+          "official",
+          "description",
+          "latest",
+          "metadata_path"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "scope": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner": {
+            "type": "object",
+            "required": [
+              "type",
+              "id"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "user",
+                  "organization"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "official": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "latest": {
+            "type": "string"
+          },
+          "metadata_path": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

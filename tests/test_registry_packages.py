@@ -11,7 +11,7 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts/registry'))
 from build_package import build, publish, digest, canonical
-from generate_registry import generate
+from generate_registry import generate, version_key
 KUJO=os.environ.get('KUJO_BIN','kujo')
 
 class RegistryTests(unittest.TestCase):
@@ -32,9 +32,9 @@ class RegistryTests(unittest.TestCase):
     def tearDown(self): self.tmp.cleanup()
     def git(self,*args): return subprocess.check_output(['git','-C',str(self.repo),*args],stderr=subprocess.DEVNULL).decode()
     def build(self): return build(self.repo,self.commit,self.release,self.policy,self.workflow,'https://kennel.kujolang.ai')
-    def kujo(self,body):
+    def kujo(self,body,extra_env=None):
         script=self.root/'check.kujo';script.write_text(body)
-        env={**os.environ,'KUJO_MODULE_PATH':str(ROOT)}
+        env={**os.environ,'KUJO_MODULE_PATH':str(ROOT),**(extra_env or {})}
         return subprocess.run([KUJO,'run',str(script),'--interpreter'],env=env,text=True,capture_output=True)
     def extract(self,blob,count=2):
         source=self.root/'archive.tar.gz';source.write_bytes(blob)
@@ -60,7 +60,7 @@ class RegistryTests(unittest.TestCase):
         self.release['repository_id']=1;self.release['draft']=True
         with self.assertRaises(ValueError):self.build()
     def test_traversal_absolute_links_modes_invalid_gzip(self):
-        for label,blob in [('traversal',self.archive('../evil')),('absolute',self.archive('/evil')),('symlink',self.archive(kind=tarfile.SYMTYPE)),('hardlink',self.archive(kind=tarfile.LNKTYPE)),('setuid',self.archive(mode=0o4755)),('gzip',b'bad'),('truncated',gzip.compress(b'x'*512))]:
+        for label,blob in [('manifest case',self.archive('KENNEL.TOML')),('traversal',self.archive('../evil')),('absolute',self.archive('/evil')),('symlink',self.archive(kind=tarfile.SYMTYPE)),('hardlink',self.archive(kind=tarfile.LNKTYPE)),('setuid',self.archive(mode=0o4755)),('gzip',b'bad'),('truncated',gzip.compress(b'x'*512))]:
             with self.subTest(label=label):
                 result=self.extract(blob,1);self.assertNotEqual(result.returncode,0,result.stdout);self.assertFalse((self.root/'stage').exists())
     def test_corrupt_header_and_duplicate_paths(self):
@@ -80,5 +80,29 @@ class RegistryTests(unittest.TestCase):
             bad=dict(m);bad[key]=value;file=self.root/'manifest.json';file.write_bytes(canonical(bad))
             result=self.kujo('from src.registry_protocol import registry_validate_version\nregistry_validate_version(parse_json(read_file('+json.dumps(str(file))+')), "fixture", "https://kennel.kujolang.ai/api/v1/packages/fixture/1.0.0.json")\n')
             self.assertNotEqual(result.returncode,0,key)
+
+    def test_locked_replay_preserves_manifest_null_and_cache_integrity(self):
+        m,a=self.build();home=self.root/'home';cache=home/'.kennel/cache/sha256';cache.mkdir(parents=True)
+        for file,key in [('package.tar.gz','archive_sha256'),('provenance.json','provenance_sha256')]:
+            (cache/m[key]).write_bytes(a[file])
+        url='https://kennel.kujolang.ai/api/v1/packages/fixture/1.0.0.json'
+        resolved={'name':'fixture','kind':'registry','source':'registry:'+url,'url':url,'requested':'1.0.0','requested_kind':'version','resolved_ref':'1.0.0','resolved_commit':m['source_commit'],'path':'','checksum':'sha256:'+m['archive_sha256'],'registry':'https://kennel.kujolang.ai/api/v1/index.json','registry_manifest':m,'package_identity':'fixture','provenance_status':'registry-statement-verified'}
+        request=self.root/'resolved.json';request.write_bytes(canonical(resolved));project=self.root/'project';project.mkdir()
+        body='\n'.join(['from src.installer import install_resolved, install_locked_package','from src.resolver import lock_entry_from_install','from src.lockfile import empty_lockfile, set_packages, save_lockfile, load_lockfile', 'cwd := '+json.dumps(str(project)), 'r := install_resolved(cwd, parse_json(read_file('+json.dumps(str(request))+')))', 'assert_equal(r["ok"], true)', 'save_lockfile(cwd, set_packages(empty_lockfile(), [lock_entry_from_install(r)]))', 'lock := load_lockfile(cwd)["lockfile"]', 'assert_equal(parse_json(lock["package"][0]["registry_manifest"])["scope"], null)', 'replay := install_locked_package(cwd, lock["package"][0])', 'assert_equal(replay["ok"], true)'])
+        r=self.kujo(body,{'HOME':str(home)});self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+        self.assertEqual((project/'kennel_packages/fixture/main.kujo').read_text(),'print("fixture")\n')
+        # A valid digest cache is reusable without any network. Corruption must fail closed.
+        call='from src.registry_transport import registry_blob\nregistry_blob("http://invalid.example/package",'+json.dumps(m['archive_sha256'])+',8388608)'
+        self.assertEqual(self.kujo(call,{'HOME':str(home)}).returncode,0)
+        (cache/m['archive_sha256']).write_bytes(b'corrupt')
+        result=self.kujo(call,{'HOME':str(home)});self.assertNotEqual(result.returncode,0);self.assertIn('HTTPS',result.stdout+result.stderr)
+        # Independently changing release identity fails provenance consistency checks.
+        m['release_id']=999;request.write_bytes(canonical(m))
+        r=self.kujo('from src.registry_protocol import registry_verify_provenance\nregistry_verify_provenance(parse_json(read_file('+json.dumps(str(request))+')))',{'HOME':str(home)})
+        self.assertNotEqual(r.returncode,0);self.assertIn('provenance mismatch',r.stdout+r.stderr)
+
+    def test_prerelease_precedence_is_numeric(self):
+        self.assertGreater(version_key('1.0.0-rc.10'), version_key('1.0.0-rc.9'))
+        self.assertGreater(version_key('1.0.0'),version_key('1.0.0-rc.10'))
 
 if __name__=='__main__':unittest.main()

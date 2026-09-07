@@ -35,3 +35,10 @@ test "transport never downgrades to HTTP" {
 	try { registry_get("http://example.com/index.json", 1024) } except err { rejected = true }
 	assert_true(rejected)
 }
+
+
+test "scoped paths never permit credentials in URL authority" {
+	rejected := false
+	try { registry_get("https://user:password@example.invalid/api/v1/packages/@scope/name.json", 1024) } except err { rejected = true }
+	assert_true(rejected)
+}

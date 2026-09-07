@@ -22,7 +22,9 @@ def version_key(version):
     match = VERSION.fullmatch(version)
     if not match:
         raise ValueError('Malformed version')
-    return tuple(map(int, match.groups()[:3])) + (match.group(4) is None, match.group(4) or '')
+    pre=match.group(4)
+    identifiers=tuple((0,int(p)) if p.isdigit() else (1,p) for p in pre.split('.')) if pre else ()
+    return tuple(map(int, match.groups()[:3])) + (pre is None, identifiers)
 
 
 def generate(root):
@@ -39,6 +41,9 @@ def generate(root):
                 if digest((folder/file).read_bytes()) != m[field]:
                     raise ValueError(f'Corrupt immutable artifact: {folder/file}')
             machine = root/'api/v1/packages'/m['package']/(m['version']+'.json')
+            checksums = f'{m["archive_sha256"]}  package.tar.gz\n{m["provenance_sha256"]}  provenance.json\n'.encode()
+            if (folder/'checksums.txt').read_bytes() != checksums:
+                raise ValueError('Checksum file differs from immutable manifest')
             if machine.read_bytes() != manifest_path.read_bytes():
                 raise ValueError('Version metadata differs from immutable manifest')
             versions.append(m)

@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Kennel registry v1 publishing statement",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "package",
+    "version",
+    "source_tag",
+    "repository",
+    "released_at",
+    "published_at",
+    "workflow_run",
+    "workflow_ref",
+    "builder",
+    "source_commit",
+    "workflow_sha",
+    "archive_sha256",
+    "repository_id",
+    "release_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "package": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_tag": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository": {
+      "type": "string",
+      "minLength": 1
+    },
+    "released_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "published_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow_run": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "builder": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "workflow_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "archive_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "repository_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "release_id": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

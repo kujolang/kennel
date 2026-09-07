@@ -237,6 +237,7 @@ func lock_entry_from_install(install_result) {
 	if resolved["kind"] == "registry" {
 		for key in ["registry", "registry_manifest", "package_identity", "provenance_status"] {
 			entry[key] := resolved[key]
+			if key == "registry_manifest" { entry[key] := to_json(resolved[key]) }
 		}
 	}
 	return entry

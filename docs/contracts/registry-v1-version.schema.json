@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Kennel registry v1 version",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "package",
+    "version",
+    "scope",
+    "owner",
+    "official",
+    "description",
+    "license",
+    "released_at",
+    "source_commit",
+    "source_tag",
+    "archive_url",
+    "archive_sha256",
+    "archive_size",
+    "file_count",
+    "provenance_url",
+    "provenance_sha256",
+    "checksum_url",
+    "dependencies",
+    "minimum_kujo_version",
+    "repository",
+    "repository_id",
+    "release_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "scope": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "owner": {
+      "type": "object",
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "user",
+            "organization"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "official": {
+      "type": "boolean"
+    },
+    "dependencies": {
+      "type": "object"
+    },
+    "package": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "released_at": {
+      "type": "string"
+    },
+    "source_tag": {
+      "type": "string"
+    },
+    "repository": {
+      "type": "string"
+    },
+    "minimum_kujo_version": {
+      "type": "string"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "archive_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "provenance_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "archive_url": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "provenance_url": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "checksum_url": {
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "archive_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8388608
+    },
+    "file_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "repository_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "release_id": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "official": {
+            "const": true
+          },
+          "owner": {
+            "properties": {
+              "type": {
+                "const": "organization"
+              },
+              "id": {
+                "const": "kujolang"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

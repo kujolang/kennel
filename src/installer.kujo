@@ -1,5 +1,5 @@
 from src.registry_transport import registry_blob, MAX_ARCHIVE_BYTES
-from src.registry_protocol import registry_validate_version, registry_verify_provenance
+from src.registry_protocol import registry_validate_version, registry_verify_provenance, registry_identity
 from src.registry_archive import extract_registry_archive
 from path_helpers import parent_dir_path
 from src.utils import command_ok, dict_get_or, ensure_dir, path_basename, run_shell, shell_quote
@@ -319,33 +319,40 @@ func read_package_metadata(install_path, fallback_name) {
 func install_registry_package(cwd, resolved) {
 	install_name := resolved["name"]
 	install_path := cwd + "/kennel_packages/" + install_name
-	staging := install_path + ".stage-" + to_string(now())
+	staging := install_path + ".stage-" + uuid_v4()
+	stage_owned := false
 	try {
-		if is_safe_install_path(install_path) == false { throw "Unsafe registry install path" }
+		registry_identity(install_name)
+		if is_safe_install_path(install_path) == false { throw("Unsafe registry install path") }
 		parent := cwd + "/kennel_packages"
 		ensure_dir(parent)
 		parts := split(install_name, "/")
 		if len(parts) == 2 {
 			parent = parent + "/" + parts[0]
-			if path_exists(parent) && path_is_symlink(parent) { throw "Symlinked package scope directory" }
+			if path_exists(parent) && path_is_symlink(parent) { throw("Symlinked package scope directory") }
 			ensure_dir(parent)
 		}
 		doc := registry_validate_version(resolved["registry_manifest"], resolved["package_identity"], resolved["url"])
-		if resolved["checksum"] != "sha256:" + doc["archive_sha256"] || resolved["resolved_commit"] != doc["source_commit"] || resolved["resolved_ref"] != doc["version"] { throw "Locked registry identity mismatch" }
+		if resolved["checksum"] != "sha256:" + doc["archive_sha256"] || resolved["resolved_commit"] != doc["source_commit"] || resolved["resolved_ref"] != doc["version"] { throw("Locked registry identity mismatch") }
 		registry_verify_provenance(doc)
 		blob := registry_blob(doc["archive_url"], doc["archive_sha256"], MAX_ARCHIVE_BYTES)
-		if len(blob) != doc["archive_size"] { throw "Archive size mismatch" }
+		if len(blob) != doc["archive_size"] { throw("Archive size mismatch") }
+		if path_exists(staging) { throw("Registry staging collision") }
+		stage_owned = true
 		extract_registry_archive(blob, staging, doc["file_count"])
-		metadata := read_package_metadata(staging, install_name)
-		if metadata["version"] != doc["version"] || metadata["name"] != doc["package"] || to_json(dict_get_or(metadata, "dependencies", {})) != to_json(doc["dependencies"]) { throw "Extracted package manifest mismatch" }
+		manifest := parse_toml(read_file(staging + "/kennel.toml"))
+		package := dict_get_or(manifest, "package", {})
+		metadata := {"name": dict_get_or(package, "name", ""), "version": dict_get_or(package, "version", ""), "dependencies": dict_get_or(manifest, "dependencies", {})}
+		if type(metadata["dependencies"]) != "dict" { throw("Invalid extracted package dependencies") }
+		if metadata["version"] != doc["version"] || metadata["name"] != doc["package"] || to_json(dict_get_or(metadata, "dependencies", {})) != to_json(doc["dependencies"]) { throw("Extracted package manifest mismatch") }
 		displacement := displace_install_path(install_path)
-		if displacement["ok"] == false { throw "Failed to displace registry installation" }
+		if displacement["ok"] == false { throw("Failed to displace registry installation") }
 		try { rename_file(staging, install_path) } except err { return replacement_failure(install_path, displacement, to_string(err)) }
 		finalized := finalize_replacement(install_path, displacement)
 		if finalized["ok"] == false { return finalized }
 		return {"ok": true, "resolved": resolved, "install_path": "kennel_packages/" + install_name, "version": doc["version"], "package_name": metadata["name"], "dependencies": doc["dependencies"], "repository": resolved["url"], "checksum": resolved["checksum"]}
 	} except err {
-		if path_exists(staging) { delete_install_path(staging) }
+		if stage_owned && path_exists(staging) { delete_install_path(staging) }
 		return {"ok": false, "error": "Registry installation failed: " + to_string(err)}
 	}
 }
@@ -402,6 +409,7 @@ func install_locked_package(cwd, lock_entry) {
 	if resolved["kind"] == "registry" {
 		for key in ["checksum", "registry", "registry_manifest", "package_identity", "provenance_status"] {
 			resolved[key] := dict_get_or(lock_entry, key, "")
+			if key == "registry_manifest" && type(resolved[key]) == "string" { resolved[key] := parse_json(resolved[key]) }
 		}
 	}
 	return install_resolved(cwd, resolved)

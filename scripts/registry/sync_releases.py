@@ -26,7 +26,19 @@ def sync(root, policy_path, only_package='', only_release=''):
         current=api('repos/'+repository)
         if current['id'] != entry['repository_id'] or current['owner']['login'] != 'kujolang' or current['private']:
             raise ValueError('Official repository identity/visibility changed')
-        releases=api(f'repos/{repository}/releases?per_page=100')
+        if only_release:
+            if not only_release.isdigit():
+                raise ValueError('Release ID must be numeric')
+            releases=[api(f'repos/{repository}/releases/{only_release}')]
+        else:
+            releases=[]
+            page=1
+            while True:
+                batch=api(f'repos/{repository}/releases?per_page=100&page={page}')
+                releases.extend(batch)
+                if len(batch)<100:
+                    break
+                page+=1
         for release in sorted(releases,key=lambda r:r['id']):
             if release['draft'] or only_release and str(release['id']) != only_release:
                 continue

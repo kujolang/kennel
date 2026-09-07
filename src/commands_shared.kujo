@@ -427,7 +427,11 @@ func index_lookup_paths(cwd, manifest_obj) {
 
 func load_static_index(index_path) {
 	if starts_with(index_path, "https://") {
-		try { return {"ok": true, "index": registry_json(index_path)} } except err { return {"ok": false, "error": to_string(err)} }
+		try {
+			doc := registry_json(index_path)
+			if type(dict_get_or(doc, "packages", null)) != "array" { throw("Malformed registry discovery index") }
+			return {"ok": true, "index": doc}
+		} except err { return {"ok": false, "error": to_string(err)} }
 	}
 	raw_json := read_file(index_path)
 	try {

@@ -6,15 +6,15 @@ export func registry_identity(value) {
 	parts := split(value, "/")
 	if starts_with(value, "@") {
 		if len(parts) != 2 {
-			throw "Scoped package identity must be @scope/name"
+			throw("Scoped package identity must be @scope/name")
 		}
 		parts[0] = substring(parts[0], 1, len(parts[0]))
 	} else if len(parts) != 1 {
-		throw "Invalid package identity"
+		throw("Invalid package identity")
 	}
 	for part in parts {
 		if part == "" || len(part) > 64 || to_lower(part) != part || validate_identifier(part, "Package identity")["ok"] == false || index_of(part, ".") >= 0 {
-			throw "Invalid package identity: " + value
+			throw("Invalid package identity: " + value)
 		}
 	}
 	return value
@@ -37,7 +37,7 @@ export func registry_request(value) {
 
 export func registry_api_base(index_url) {
 	if starts_with(index_url, "https://") == false || ends_with(index_url, "/api/v1/index.json") == false {
-		throw "Remote registry index must use HTTPS /api/v1/index.json"
+		throw("Remote registry index must use HTTPS /api/v1/index.json")
 	}
 	return substring(index_url, 0, len(index_url) - len("index.json"))
 }
@@ -75,7 +75,14 @@ export func registry_valid_version(version) {
 
 export func registry_validate_version(doc, identity, version_url) {
 	if type(doc) != "dict" || dict_get_or(doc, "schema_version", 0) != 1 {
-		throw "Malformed package version schema"
+		throw("Malformed package version schema")
+	}
+	for key in ["package", "version", "description", "license", "released_at", "source_commit", "source_tag", "archive_url", "provenance_url", "checksum_url", "repository", "minimum_kujo_version"] {
+		if type(dict_get_or(doc, key, null)) != "string" { throw("Missing or malformed release field: " + key) }
+	}
+	if has_key(doc, "scope") == false || type(dict_get_or(doc, "official", null)) != "bool" { throw("Missing ownership fields") }
+	for key in ["repository_id", "release_id"] {
+		if type(dict_get_or(doc, key, null)) != "int" || doc[key] < 1 { throw("Invalid release identity: " + key) }
 	}
 	name := registry_identity(identity)
 	actual := to_string(dict_get_or(doc, "package", ""))
@@ -84,39 +91,43 @@ export func registry_validate_version(doc, identity, version_url) {
 		actual = "@" + to_string(scope) + "/" + actual
 	}
 	if actual != name {
-		throw "Package identity mismatch"
+		throw("Package identity mismatch")
 	}
 	version := to_string(dict_get_or(doc, "version", ""))
 	if registry_valid_version(version) == false || index_of(version, "/") >= 0 || ends_with(version_url, "/" + identity + "/" + version + ".json") == false {
-		throw "Package version URL mismatch"
+		throw("Package version URL mismatch")
 	}
 	owner := dict_get_or(doc, "owner", {})
+	if type(owner) != "dict" || (dict_get_or(owner, "type", "") != "user" && dict_get_or(owner, "type", "") != "organization") || type(dict_get_or(owner, "id", null)) != "string" || owner["id"] == "" { throw("Malformed package owner") }
+	for ch in split(doc["source_commit"], "") {
+		if ch != "" && index_of("0123456789abcdef", ch) < 0 { throw("Malformed source commit") }
+	}
 	if scope == null && (dict_get_or(doc, "official", false) != true || dict_get_or(owner, "type", "") != "organization" || dict_get_or(owner, "id", "") != "kujolang") {
-		throw "Unscoped packages are reserved for official Kujo ownership"
+		throw("Unscoped packages are reserved for official Kujo ownership")
 	}
 	if scope != null && dict_get_or(doc, "official", false) {
-		throw "Scoped packages cannot claim reserved official identity"
+		throw("Scoped packages cannot claim reserved official identity")
 	}
 	for key in ["archive_sha256", "provenance_sha256"] {
 		if valid_digest(dict_get_or(doc, key, "")) == false {
-			throw "Malformed package digest: " + key
+			throw("Malformed package digest: " + key)
 		}
 	}
 	if type(dict_get_or(doc, "archive_size", "")) != "int" || doc["archive_size"] <= 0 || doc["archive_size"] > 8388608 || type(dict_get_or(doc, "file_count", "")) != "int" || doc["file_count"] < 1 || doc["file_count"] > 10000 {
-		throw "Invalid package size/file count"
+		throw("Invalid package size/file count")
 	}
 	if len(to_string(dict_get_or(doc, "source_commit", ""))) != 40 || type(dict_get_or(doc, "dependencies", "")) != "dict" {
-		throw "Malformed source commit/dependencies"
+		throw("Malformed source commit/dependencies")
 	}
 	marker := index_of(version_url, "/api/v1/packages/")
 	if marker < 0 {
-		throw "Invalid version metadata URL"
+		throw("Invalid version metadata URL")
 	}
 	origin := substring(version_url, 0, marker)
 	prefix := origin + "/packages/" + identity + "/" + version + "/"
 	for pair in [["archive_url", "package.tar.gz"], ["provenance_url", "provenance.json"], ["checksum_url", "checksums.txt"]] {
 		if dict_get_or(doc, pair[0], "") != prefix + pair[1] {
-			throw "Artifact URL is outside immutable package namespace"
+			throw("Artifact URL is outside immutable package namespace")
 		}
 	}
 	return doc
@@ -127,15 +138,19 @@ export func registry_resolve_name(index_url, request_value, ranges) {
 	identity := request["name"]
 	base := registry_api_base(index_url)
 	metadata := registry_json(base + "packages/" + identity + ".json")
-	if dict_get_or(metadata, "name", "") != identity || type(dict_get_or(metadata, "versions", "")) != "array" {
-		throw "Malformed package metadata"
+	metadata_identity := to_string(dict_get_or(metadata, "name", ""))
+	if dict_get_or(metadata, "scope", null) != null {
+		metadata_identity = "@" + to_string(metadata["scope"]) + "/" + metadata_identity
+	}
+	if metadata_identity != identity || type(dict_get_or(metadata, "versions", "")) != "array" {
+		throw("Malformed package metadata")
 	}
 	selector := request["selector"]
 	best := ""
 	best_parsed := {}
 	for entry in metadata["versions"] {
 		version := to_string(dict_get_or(entry, "version", ""))
-		if registry_valid_version(version) == false { throw "Malformed registry SemVer" }
+		if registry_valid_version(version) == false { throw("Malformed registry SemVer") }
 		if dict_get_or(entry, "yanked", false) {
 			continue
 		}
@@ -152,7 +167,7 @@ export func registry_resolve_name(index_url, request_value, ranges) {
 		}
 	}
 	if best == "" {
-		throw "No available package version matches " + request_value
+		throw("No available package version matches " + request_value)
 	}
 	url := base + "packages/" + identity + "/" + best + ".json"
 	doc := registry_validate_version(registry_json(url), identity, url)
@@ -164,7 +179,7 @@ export func registry_resolve_spec(name, spec) {
 	identity := name
 	marker := index_of(url, "/api/v1/packages/")
 	if marker < 0 {
-		throw "Invalid registry version source"
+		throw("Invalid registry version source")
 	}
 	body := substring(url, marker + len("/api/v1/packages/"), len(url))
 	parts := split(body, "/")
@@ -173,11 +188,11 @@ export func registry_resolve_spec(name, spec) {
 	} else if len(parts) == 3 {
 		identity = parts[0] + "/" + parts[1]
 	} else {
-		throw "Invalid registry package source"
+		throw("Invalid registry package source")
 	}
 	doc := registry_validate_version(registry_json(url), identity, url)
 	if dict_get_or(spec, "checksum", "") != "" && spec["checksum"] != "sha256:" + doc["archive_sha256"] {
-		throw "Package checksum changed after resolution"
+		throw("Package checksum changed after resolution")
 	}
 	return {"name": name, "kind": "registry", "source": "registry:" + url, "url": url, "requested": doc["version"], "requested_kind": "version", "resolved_ref": doc["version"], "resolved_commit": doc["source_commit"], "path": "", "checksum": "sha256:" + doc["archive_sha256"], "registry": substring(url, 0, marker) + "/api/v1/index.json", "registry_manifest": doc, "package_identity": identity, "provenance_status": "registry-statement-verified"}
 }
@@ -186,19 +201,19 @@ export func registry_verify_provenance(doc) {
 	data := registry_blob(doc["provenance_url"], doc["provenance_sha256"], 1048576)
 	provenance := parse_json(decode_charset(data, "utf-8", 1048576))
 	if type(provenance) != "dict" || dict_get_or(provenance, "schema_version", 0) != 1 {
-		throw "Malformed package provenance"
+		throw("Malformed package provenance")
 	}
 	for key in ["package", "version", "archive_sha256", "source_commit", "source_tag", "repository", "repository_id", "release_id"] {
 		if dict_get_or(provenance, key, null) != dict_get_or(doc, key, "") {
-			throw "Package provenance mismatch: " + key
+			throw("Package provenance mismatch: " + key)
 		}
 	}
 	if doc["official"] && starts_with(to_string(dict_get_or(provenance, "repository", "")), "kujolang/") == false {
-		throw "Official package requires Kujo repository provenance"
+		throw("Official package requires Kujo repository provenance")
 	}
 	for key in ["workflow_run", "workflow_ref", "workflow_sha", "published_at"] {
 		if to_string(dict_get_or(provenance, key, "")) == "" {
-			throw "Missing publishing workflow provenance: " + key
+			throw("Missing publishing workflow provenance: " + key)
 		}
 	}
 	return true

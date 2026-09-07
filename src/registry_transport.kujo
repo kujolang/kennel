@@ -4,29 +4,33 @@ export OFFICIAL_REGISTRY := "https://kennel.kujolang.ai/api/v1/index.json"
 export MAX_ARCHIVE_BYTES := 8388608
 
 export func registry_get(url, maximum) {
-	if starts_with(url, "https://") == false || index_of(url, "@") >= 0 && index_of(url, "/@") < 0 || index_of(url, "#") >= 0 {
-		throw "Registry transport requires an HTTPS URL without credentials or fragments"
+	if starts_with(url, "https://") == false || index_of(url, "#") >= 0 {
+		throw("Registry transport requires an HTTPS URL without credentials or fragments")
+	}
+	authority := split(substring(url, len("https://"), len(url)), "/")[0]
+	if authority == "" || index_of(authority, "@") >= 0 {
+		throw("Registry transport forbids URL credentials")
 	}
 	result := http_request(url, {"method": "GET", "timeout": 30, "max_response_bytes": maximum, "redirects": "none", "headers": {"Accept": "application/json, application/octet-stream", "User-Agent": "Kennel/registry-v1"}})
 	match result {
 		case Result::Ok(response): {
 			if response["status"] != 200 {
-				throw "Registry request failed (HTTP " + to_string(response["status"]) + "): " + url
+				throw("Registry request failed (HTTP " + to_string(response["status"]) + "): " + url)
 			}
 			return response
 		}
 		case Result::Err(message): {
-			throw "Registry network failure: " + to_string(message)
+			throw("Registry network failure: " + to_string(message))
 		}
 	}
-	throw "Invalid registry response"
+	throw("Invalid registry response")
 }
 
 export func registry_json(url) {
 	response := registry_get(url, 1048576)
 	doc := parse_json(response["body"])
 	if type(doc) != "dict" || dict_get_or(doc, "schema_version", 0) != 1 {
-		throw "Unsupported or malformed registry schema: " + url
+		throw("Unsupported or malformed registry schema: " + url)
 	}
 	return doc
 }
@@ -34,12 +38,12 @@ export func registry_json(url) {
 export func registry_cache_root() {
 	home := env("HOME")
 	if trim(home) == "" {
-		throw "HOME is required for the Kennel artifact cache"
+		throw("HOME is required for the Kennel artifact cache")
 	}
 	root := home + "/.kennel/cache/sha256"
 	for part in [home + "/.kennel", home + "/.kennel/cache", root] {
 		if (path_exists(part) && path_is_symlink(part)) {
-			throw "Refusing symlinked Kennel cache directory"
+			throw("Refusing symlinked Kennel cache directory")
 		}
 		ensure_dir(part)
 	}
@@ -48,23 +52,24 @@ export func registry_cache_root() {
 
 export func registry_blob(url, digest, maximum) {
 	if len(digest) != 64 {
-		throw "Invalid archive SHA-256"
+		throw("Invalid archive SHA-256")
 	}
 	for ch in split(digest, "") {
 		if index_of("0123456789abcdef", ch) < 0 {
-			throw "Invalid archive SHA-256"
+			throw("Invalid archive SHA-256")
 		}
 	}
 	cache := registry_cache_root() + "/" + digest
 	if file_exists(cache) && path_is_symlink(cache) == false && file_size(cache) <= maximum {
-		if sha256_file(cache) == digest {
-			return io_read_bytes(cache, maximum)
+		cached := io_read_bytes(cache, maximum)
+		if sha256(cached) == digest {
+			return cached
 		}
 	}
 	response := registry_get(url, maximum)
 	data := response["_body_bytes"]
 	if sha256(data) != digest {
-		throw "Registry checksum mismatch: " + url
+		throw("Registry checksum mismatch: " + url)
 	}
 	# Atomic replacement never follows an existing cache-file symlink.
 	write_file_atomic(cache, data, true)
