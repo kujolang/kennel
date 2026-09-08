@@ -7,7 +7,7 @@ Status: 1.1.0 release candidate, not published. The latest historical release re
 **Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports`. The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
 
 
-From this checkout:
+Build the updated Kujo checkout with `cargo build --release --bin kujo`, then export `KUJO_BIN=/absolute/path/to/kujo/target/release/kujo`. From this Kennel checkout:
 
 ```sh
 python3 scripts/install.py --source .

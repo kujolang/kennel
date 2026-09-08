@@ -59,6 +59,18 @@ class GlobalTests(unittest.TestCase):
                 patch.object(installer,'extract') as extraction,self.assertRaisesRegex(ValueError,'checksum'):
             installer.download_client('2.0.0',self.base)
         extraction.assert_not_called()
+    def test_provenance_identity_mismatch_stops_before_extraction(self):
+        provenance={'schema_version':1,'package':'kennel','version':'2.0.0',
+                    'source_commit':'wrong','workflow_run':'https://github.com/kujolang/kennel-registry/actions/runs/1','workflow_sha':'a'*40}
+        raw=json.dumps(provenance).encode()
+        manifest={'schema_version':1,'package':'kennel','version':'2.0.0','official':True,'scope':None,
+                  'owner':{'type':'organization','id':'kujolang'},'repository':'kujolang/kennel','repository_id':1264528549,
+                  'archive_url':installer.REGISTRY+'/archive','archive_size':3,'archive_sha256':installer.sha(b'abc'),
+                  'provenance_url':installer.REGISTRY+'/provenance','provenance_sha256':installer.sha(raw),'source_commit':'expected'}
+        with patch.object(installer,'fetch',side_effect=[json.dumps(manifest).encode(),b'abc',raw]),\
+                patch.object(installer,'extract') as extraction,self.assertRaisesRegex(ValueError,'identity mismatch'):
+            installer.download_client('2.0.0',self.base)
+        extraction.assert_not_called()
     def test_command_map_and_library_rejection(self):
         (self.base/'main.kujo').write_text('print(1)')
         self.assertEqual(tools.command_map(self.base,{'package':{'name':'demo'},'kujo':{'entry':'main.kujo'}}),{'demo':'main.kujo'})
