@@ -32,7 +32,7 @@ def main():
             result = subprocess.run(list(map(str, args)), env=env, cwd=home,
                                     capture_output=True, text=True, timeout=180)
             assert result.returncode == code, (args, result.returncode, result.stdout, result.stderr)
-            return result.stdout + result.stderr
+            return result.stdout if code == 0 else result.stdout + result.stderr
 
         run(sys.executable, ROOT/'scripts/install.py', '--source', ROOT, '--no-modify-path')
         launcher = base/'bin/kennel'
