@@ -10,12 +10,12 @@ root=Path(sys.argv[1])
 expected=(root/'api/v1/index.json').read_bytes()
 for attempt in range(40):
     try:
-        with urllib.request.urlopen('https://kennel.kujolang.ai/api/v1/index.json',timeout=15) as r:
+        with urllib.request.urlopen(urllib.request.Request('https://kennel.kujolang.ai/api/v1/index.json', headers={'User-Agent':'Kennel/registry-v1'}),timeout=15) as r:
             if r.read(1048577) != expected:
                 raise ValueError('Deployment has not caught up')
         for manifest in root.glob('packages/*/*/manifest.json'):
             m=json.loads(manifest.read_bytes())
-            with urllib.request.urlopen(m['archive_url'],timeout=30) as r:
+            with urllib.request.urlopen(urllib.request.Request(m['archive_url'], headers={'User-Agent':'Kennel/registry-v1'}),timeout=30) as r:
                 blob=r.read(8388609)
             if hashlib.sha256(blob).hexdigest()!=m['archive_sha256']:
                 raise ValueError('Deployed artifact digest mismatch')

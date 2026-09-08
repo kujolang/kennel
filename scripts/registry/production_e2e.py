@@ -26,7 +26,7 @@ def main():
             subprocess.run([kujo, 'run', str(ROOT/'kennel.kujo'), '--interpreter', '--', *args, '--project-dir', str(project)], env=env, check=True, timeout=120)
             return round(time.monotonic()-start, 3)
         for package in ('changebucket', 'kennel'):
-            request = urllib.request.Request(BASE+'/api/v1/packages/'+package+'.json')
+            request = urllib.request.Request(BASE+'/api/v1/packages/'+package+'.json', headers={'User-Agent': 'Kennel/registry-v1'})
             with urllib.request.urlopen(request, timeout=30) as response:
                 metadata = json.load(response)
             version = metadata['latest']
