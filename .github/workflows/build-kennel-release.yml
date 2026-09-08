@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kennel
-          ref: aa0e5528906c5f9447b63bd4cc10f354535427af
+          ref: 8491e2b1edf9b12e9aeff0b3544b05233319fa43
           path: publisher
           persist-credentials: false
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
