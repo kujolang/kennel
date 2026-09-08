@@ -54,19 +54,19 @@ class GlobalTests(unittest.TestCase):
     def test_checksum_mismatch_stops_before_extraction(self):
         m={'schema_version':1,'package':'kennel','version':'2.0.0','official':True,'scope':None,
            'owner':{'type':'organization','id':'kujolang'},'repository':'kujolang/kennel','repository_id':1264528549,'archive_url':installer.REGISTRY+'/archive',
-           'archive_size':3,'archive_sha256':'0'*64}
+           'archive_size':3,'archive_sha256':'0'*64,'file_count':1,'provenance_url':installer.REGISTRY+'/provenance','provenance_sha256':'a'*64,'source_commit':'a'*40,'source_tag':'v2.0.0','release_id':1}
         with patch.object(installer,'fetch',side_effect=[json.dumps(m).encode(),b'bad']),\
                 patch.object(installer,'extract') as extraction,self.assertRaisesRegex(ValueError,'checksum'):
             installer.download_client('2.0.0',self.base)
         extraction.assert_not_called()
     def test_provenance_identity_mismatch_stops_before_extraction(self):
         provenance={'schema_version':1,'package':'kennel','version':'2.0.0',
-                    'source_commit':'wrong','workflow_run':'https://github.com/kujolang/kennel-registry/actions/runs/1','workflow_sha':'a'*40}
+                    'source_commit':'b'*40,'workflow_run':'https://github.com/kujolang/kennel-registry/actions/runs/1','workflow_sha':'a'*40}
         raw=json.dumps(provenance).encode()
         manifest={'schema_version':1,'package':'kennel','version':'2.0.0','official':True,'scope':None,
                   'owner':{'type':'organization','id':'kujolang'},'repository':'kujolang/kennel','repository_id':1264528549,
                   'archive_url':installer.REGISTRY+'/archive','archive_size':3,'archive_sha256':installer.sha(b'abc'),
-                  'provenance_url':installer.REGISTRY+'/provenance','provenance_sha256':installer.sha(raw),'source_commit':'expected'}
+                  'provenance_url':installer.REGISTRY+'/provenance','provenance_sha256':installer.sha(raw),'source_commit':'a'*40,'source_tag':'v2.0.0','release_id':1,'file_count':1}
         with patch.object(installer,'fetch',side_effect=[json.dumps(manifest).encode(),b'abc',raw]),\
                 patch.object(installer,'extract') as extraction,self.assertRaisesRegex(ValueError,'identity mismatch'):
             installer.download_client('2.0.0',self.base)

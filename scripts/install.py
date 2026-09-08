@@ -89,6 +89,17 @@ def download_client(version, target):
             or manifest.get('repository')!='kujolang/kennel' or manifest.get('repository_id')!=1264528549
             or manifest.get('scope') is not None or manifest.get('owner')!={'type':'organization','id':'kujolang'}):
         raise ValueError('Invalid official Kennel release identity')
+    required = {'archive_url','archive_size','archive_sha256','file_count','provenance_url','provenance_sha256',
+                'source_commit','source_tag','repository','repository_id','release_id','package','version'}
+    if not required.issubset(manifest):
+        raise ValueError('Incomplete official release metadata')
+    if (not re.fullmatch(r'[0-9a-f]{40}',str(manifest['source_commit']))
+            or manifest['source_tag'] not in {version, 'v'+version}
+            or type(manifest['release_id']) is not int or manifest['release_id']<=0
+            or type(manifest['archive_size']) is not int or not 0<manifest['archive_size']<=MAX_ARCHIVE
+            or type(manifest['file_count']) is not int or not 0<manifest['file_count']<=10000
+            or not all(re.fullmatch(r'[0-9a-f]{64}',str(manifest[k])) for k in ['archive_sha256','provenance_sha256'])):
+        raise ValueError('Malformed official release metadata')
     archive = fetch(manifest['archive_url'], MAX_ARCHIVE)
     if len(archive)!=manifest['archive_size'] or sha(archive)!=manifest['archive_sha256']:
         raise ValueError('Kennel archive checksum/size mismatch')
@@ -100,7 +111,7 @@ def download_client(version, target):
     if provenance.get('schema_version')!=1 or not str(provenance.get('workflow_run','')).startswith('https://github.com/kujolang/kennel-registry/actions/runs/') or not re.fullmatch(r'[0-9a-f]{40}',str(provenance.get('workflow_sha',''))):
         raise ValueError('Invalid official publishing workflow provenance')
     for key in ['package','version','source_commit','source_tag','repository','repository_id','release_id','archive_sha256']:
-        if provenance.get(key)!=manifest.get(key):
+        if key not in provenance or provenance[key]!=manifest[key]:
             raise ValueError('Kennel provenance identity mismatch: '+key)
     if extract(archive,target)!=manifest['file_count']:
         raise ValueError('Kennel archive file count mismatch')
