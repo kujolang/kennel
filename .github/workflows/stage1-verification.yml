@@ -191,3 +191,12 @@ jobs:
         run: |
           set -euo pipefail
           bash ./scripts/verify-profiles.sh "${{ matrix.profile }}"
+
+      - name: Verify anonymous production installs
+        if: matrix.profile == 'full'
+        env:
+          KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
+        run: |
+          set -euo pipefail
+          python3 scripts/registry/production_e2e.py
+          python3 scripts/registry/global_tools_production_e2e.py
