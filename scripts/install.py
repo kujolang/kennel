@@ -185,7 +185,7 @@ def main(argv=None):
     if not match or tuple(map(int,match.groups()))<(1,3,1):
         raise ValueError('Kujo 1.3.1+ is required; installed runtime: '+version.strip())
     if '--isolated-imports' not in subprocess.check_output([kujo,'run','--help'],text=True):
-        raise ValueError('This Kujo runtime lacks --isolated-imports. Build the updated Kujo source or wait for its next release before installing Kennel 1.1.0.')
+        raise ValueError('This Kujo runtime lacks --isolated-imports. Upgrade to a Kujo release providing that capability, or use a compatible source build for review.')
     base=args.home.expanduser().absolute()
     if any(p.is_symlink() for p in [base,*base.parents]):
         raise ValueError('Installation directory must not traverse symbolic links')

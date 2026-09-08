@@ -42,7 +42,7 @@ def runtime():
     if not found:
         raise ValueError('Kujo 1.3.1+ is required; install Kujo or set KUJO_BIN')
     if '--isolated-imports' not in subprocess.check_output([found, 'run', '--help'], text=True):
-        raise ValueError('This Kujo runtime lacks --isolated-imports; use the updated Kujo source build until its next release')
+        raise ValueError('This Kujo runtime lacks --isolated-imports; upgrade to a compatible Kujo release or use a compatible source build for review')
     return str(Path(found).absolute())
 
 
