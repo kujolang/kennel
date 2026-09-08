@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kennel
-          ref: 070a16ef520f45b6b53dbe3c24506deccca2b12c
+          ref: 1c4b19f205437bb34009f2ffd28fb67cea7d4e4e
           path: publisher
           persist-credentials: false
       - name: Build from published releases and validate registry
