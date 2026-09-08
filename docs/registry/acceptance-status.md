@@ -1,5 +1,7 @@
 # Static registry production acceptance
 
+For current ecosystem coverage, see [36-package production acceptance](ecosystem-acceptance.md). The initial two-package milestone below is retained as historical evidence.
+
 2026-09-08: **the static registry is live at https://kennel.kujolang.ai and real package installation passes.** Consumers provide package names, not GitHub source URLs. Acceptance used the updated Kennel client on main and Kujo 1.3.1. Historical Kennel releases retain their original behavior; no test release or replacement artifact was created.
 
 ## Architecture and Kennel changes
@@ -20,7 +22,7 @@ Small `release.published` callers use the central builder. Registry-owned schedu
 
 [Run 34250625389](https://github.com/kujolang/kennel-registry/actions/runs/34250625389) passed the complete reconciliation and production archive-verification workflow. Callers pin central workflow `161d5e5`; publisher tooling is pinned to `aa0e552`. New client archive performance fixes do not change published package bytes.
 
-Only these real releases are enrolled/backfilled:
+At the initial milestone, these real releases were enrolled/backfilled:
 
 | Package | Version | GitHub Release ID | Compressed bytes | Files |
 | --- | --- | --- | --- | --- |

@@ -1,0 +1,300 @@
+{
+  "verified_at": "2026-09-08",
+  "registry": "https://kennel.kujolang.ai",
+  "client_commit": "35679c2",
+  "kujo_version": "1.3.1",
+  "results": [
+    {
+      "package": "ability",
+      "version": "1.1.0",
+      "fresh_seconds": 2.822,
+      "cached_seconds": 1.056,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "agents-sdk",
+      "version": "1.0.0",
+      "fresh_seconds": 3.408,
+      "cached_seconds": 1.63,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "ai-sdk",
+      "version": "1.0.0",
+      "fresh_seconds": 2.855,
+      "cached_seconds": 0.853,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "assetworks",
+      "version": "0.2.0",
+      "fresh_seconds": 3.037,
+      "cached_seconds": 0.721,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "bluepencil",
+      "version": "0.2.0",
+      "fresh_seconds": 3.002,
+      "cached_seconds": 1.165,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "casefile",
+      "version": "1.0.0",
+      "fresh_seconds": 2.699,
+      "cached_seconds": 0.683,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "changebucket",
+      "version": "1.0.0",
+      "fresh_seconds": 2.682,
+      "cached_seconds": 1.006,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "concord",
+      "version": "1.0.0",
+      "fresh_seconds": 2.914,
+      "cached_seconds": 0.955,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "dossier",
+      "version": "0.2.0",
+      "fresh_seconds": 5.368,
+      "cached_seconds": 1.061,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "contentgraph",
+      "version": "0.3.0",
+      "fresh_seconds": 7.256,
+      "cached_seconds": 3.44,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "eval",
+      "version": "1.0.0",
+      "fresh_seconds": 3.913,
+      "cached_seconds": 1.774,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "fence",
+      "version": "1.0.0",
+      "fresh_seconds": 3.174,
+      "cached_seconds": 1.148,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "galleypack",
+      "version": "0.2.0",
+      "fresh_seconds": 3.17,
+      "cached_seconds": 1.413,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "howl",
+      "version": "1.1.0",
+      "fresh_seconds": 3.261,
+      "cached_seconds": 0.838,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "kennel",
+      "version": "1.0.1",
+      "fresh_seconds": 4.777,
+      "cached_seconds": 3.269,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "mcp",
+      "version": "1.1.1",
+      "fresh_seconds": 7.55,
+      "cached_seconds": 3.571,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "lens",
+      "version": "1.1.0",
+      "fresh_seconds": 11.019,
+      "cached_seconds": 8.244,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "muzzle",
+      "version": "1.1.0",
+      "fresh_seconds": 3.102,
+      "cached_seconds": 1.054,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "packwrite",
+      "version": "1.1.0",
+      "fresh_seconds": 3.346,
+      "cached_seconds": 1.077,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "patchbrief",
+      "version": "1.0.1",
+      "fresh_seconds": 3.352,
+      "cached_seconds": 1.278,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "presswire",
+      "version": "0.2.0",
+      "fresh_seconds": 3.676,
+      "cached_seconds": 1.272,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "readersignal",
+      "version": "0.2.0",
+      "fresh_seconds": 3.798,
+      "cached_seconds": 1.385,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "redact",
+      "version": "1.0.0",
+      "fresh_seconds": 6.284,
+      "cached_seconds": 3.794,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "runledger",
+      "version": "1.1.0",
+      "fresh_seconds": 4.619,
+      "cached_seconds": 1.675,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "rag",
+      "version": "1.0.0",
+      "fresh_seconds": 12.353,
+      "cached_seconds": 13.518,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "scent",
+      "version": "1.0.0",
+      "fresh_seconds": 3.787,
+      "cached_seconds": 2.434,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "scout",
+      "version": "1.0.0",
+      "fresh_seconds": 7.082,
+      "cached_seconds": 1.608,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "shipcheck",
+      "version": "1.0.0",
+      "fresh_seconds": 2.912,
+      "cached_seconds": 0.813,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "searchbridge",
+      "version": "1.0.0",
+      "fresh_seconds": 5.757,
+      "cached_seconds": 4.082,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "siteprobe",
+      "version": "0.3.0",
+      "fresh_seconds": 3.701,
+      "cached_seconds": 1.759,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "spec",
+      "version": "1.0.1",
+      "fresh_seconds": 3.801,
+      "cached_seconds": 1.439,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "sitekit",
+      "version": "1.0.0",
+      "fresh_seconds": 12.251,
+      "cached_seconds": 8.908,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "storydesk",
+      "version": "0.2.0",
+      "fresh_seconds": 6.4,
+      "cached_seconds": 4.212,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "versionseal",
+      "version": "0.2.0",
+      "fresh_seconds": 3.209,
+      "cached_seconds": 1.039,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "watchdog",
+      "version": "1.0.1",
+      "fresh_seconds": 5.816,
+      "cached_seconds": 2.891,
+      "git_disabled": true,
+      "status": "passed"
+    },
+    {
+      "package": "workcell",
+      "version": "1.1.0",
+      "fresh_seconds": 6.918,
+      "cached_seconds": 3.427,
+      "git_disabled": true,
+      "status": "passed"
+    }
+  ],
+  "summary": {
+    "total": 36,
+    "passed": 36
+  }
+}
