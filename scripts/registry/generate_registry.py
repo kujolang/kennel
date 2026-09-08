@@ -30,6 +30,8 @@ def version_key(version):
 def generate(root):
     root = Path(root)
     summaries = []
+    catalog_path = root.parent/'catalog.json'
+    catalog = json.loads(catalog_path.read_bytes()).get('packages', {}) if catalog_path.exists() else {}
     for package_dir in sorted((root / 'packages').iterdir()) if (root / 'packages').exists() else []:
         versions = []
         for manifest_path in package_dir.glob('*/manifest.json'):
@@ -54,13 +56,18 @@ def generate(root):
         latest = stable[0] if stable else versions[0]
         name = latest['package']
         summary = {'schema_version':1, 'name':name, 'scope':None, 'owner':latest['owner'], 'official':True, 'description':latest['description'], 'latest':stable[0]['version'] if stable else '', 'metadata_path':f'packages/{name}.json'}
+        if name in catalog:
+            description = catalog[name].get('description', latest['description'])
+            if not isinstance(description, str) or not description.strip():
+                raise ValueError('Catalog description must be nonempty text')
+            summary['description'] = description
         metadata = {**summary, 'versions':[{'version':m['version'],'metadata_url':f'https://kennel.kujolang.ai/api/v1/packages/{name}/{m["version"]}.json','archive_sha256':m['archive_sha256'],'yanked':False} for m in versions]}
         (root/'api/v1/packages'/f'{name}.json').write_bytes(canonical(metadata))
         summaries.append(summary)
         for m in versions:
             render_package(root, m, versions, f'{name}/{m["version"]}')
-        render_package(root, latest, versions, name)
-        text = f'# {name}\n\n{latest["description"]}\n\nInstall: `kennel add {name}`\n\nLatest stable: {summary["latest"] or "none"}\n\nVersions: '+', '.join(m['version'] for m in versions)+f'\n\nMetadata: https://kennel.kujolang.ai/api/v1/packages/{name}.json\n\nProvenance: {latest["provenance_url"]}\n\nArchive SHA-256: {latest["archive_sha256"]}\n\nDependencies: '+json.dumps(latest['dependencies'])+'\n'
+        render_package(root, {**latest, 'description': summary['description']}, versions, name)
+        text = f'# {name}\n\n{summary["description"]}\n\nInstall: `kennel add {name}`\n\nLatest stable: {summary["latest"] or "none"}\n\nVersions: '+', '.join(m['version'] for m in versions)+f'\n\nMetadata: https://kennel.kujolang.ai/api/v1/packages/{name}.json\n\nProvenance: {latest["provenance_url"]}\n\nArchive SHA-256: {latest["archive_sha256"]}\n\nDependencies: '+json.dumps(latest['dependencies'])+'\n'
         (root/f'{name}.md').write_text(text)
     (root/'api/v1').mkdir(parents=True, exist_ok=True)
     (root/'api/v1/index.json').write_bytes(canonical({'schema_version':1,'registry':'https://kennel.kujolang.ai','packages':summaries}))
