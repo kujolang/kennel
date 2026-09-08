@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix='kennel-global-e2e-') as temporary:
     manifest('1.0.0')
     (source/'helper.kujo').write_text('export value := "installed module"\n')
     (folder/'helper.kujo').write_text('print("WORKSPACE MODULE MUST NOT EXECUTE")\nexport value := "workspace"\n')
-    (source/'main.kujo').write_text('from helper import value\nassert(value == "installed module")\nprint(to_json({"cwd": os_getcwd(), "args": args()}))\n')
+    (source/'main.kujo').write_text('from helper import value\nif value != "installed module" { exit(94) }\nprint(to_json({"cwd": os_getcwd(), "args": args()}))\n')
     (source/'exit.kujo').write_text('exit(7)\n')
     spec='file:'+str(source)
     run(kennel,'tool','install',spec)
