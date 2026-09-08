@@ -1,6 +1,6 @@
 # Kennel 1.1.0 release candidate
 
-Status: implementation ready for review; release signoff remains gated on a clean full-profile run. **No tag, GitHub Release or registry package for 1.1.0 has been published.** Review this candidate before approving a release.
+Status: pre-release candidate for review. Current CI conclusions and acceptance receipts are linked from the three PRs below; do not treat historical failures in this record as current CI status. **No tag, GitHub Release or registry package for 1.1.0 has been published.** Review this candidate before approving a release.
 
 ## Review scope
 
@@ -19,6 +19,22 @@ The published Kujo 1.3.1 runtime does **not** have the isolation flag. Build the
 
 After review, publish the chosen compatible Kujo runtime release, then Kennel 1.1.0 as an actual GitHub Release. The registry's existing scheduled reconciliation packages that exact release and Pages deploys it. The marker in the latest stable archive enables public onboarding automatically. A final fresh public bootstrap after those releases is a release gate, not something simulated by overwriting historical artifacts.
 
+## Merge and release decision checklist
+
+Merging these PRs does not publish a Kujo or Kennel version. Merge after review in this order: Kujo PR 7, Kennel PR 1, then registry PR 1. The registry merge does deploy its generated onboarding through Pages; it retains the preview notice until an installer-enabled stable Kennel archive is available. Reusable workflows and runtime checkouts use immutable commit pins, so a merge does not silently substitute another implementation.
+
+Before approving release:
+
+1. Require successful current PR checks, including Kennel's full-profile matrix job. The manual nightly workflow can also run on the candidate branch without a release.
+2. Review the manual Kujo `release-binaries` workflow artifacts. Branch dispatch builds candidate artifacts; both GitHub-release and npm publication jobs are tag-only and must remain skipped. Manual artifacts still carry the checkout's Cargo version and are not a new public version.
+3. Review `CHANGELOG.md` and the complete Kujo Unreleased scope. This companion PR does not represent all changes already merged since Kujo 1.3.1. At release approval, select the next Kujo version and synchronize Cargo/npm manifests and release-state documents using the existing release checks. Kennel's proposed version is 1.1.0.
+4. Reproduce live global-command acceptance with `KUJO_BIN=/absolute/compatible/kujo python3 scripts/registry/global_tools_production_e2e.py`. It uses a temporary home, keeps user shell profiles unchanged, installs four real released tools, checks exact-version updates and failed-client-update rollback, then removes its temporary state.
+5. Reproduce project-package acceptance with `KUJO_BIN=/absolute/compatible/kujo python3 scripts/registry/production_e2e.py`.
+
+Only after the release decision: publish the compatible Kujo runtime, then publish the actual Kennel GitHub Release. Pushing a Kujo `v*` tag activates its release-publishing workflow, so do not create that tag during review. Kennel's official Release publication (not a tag alone) activates package distribution. Registry reconciliation runs every 15 minutes; maintainers can dispatch its existing workflow for a selected package/release ID if needed.
+
+After publication, verify the public installer in a fresh home, `kennel --version`, a global command and `kennel add changebucket`, and confirm Pages serves the new immutable manifest/archive and removes the preview notice. Those checks depend on actual published releases and cannot be completed honestly during pre-release review.
+
 ## Review locally
 
 Build the updated Kujo checkout with `cargo build --release --bin kujo`, then:
@@ -35,7 +51,7 @@ python3 scripts/install.py --source . --home /absolute/review-home --no-modify-p
 
 If an unrelated `shipcheck` already exists on PATH, installation deliberately refuses it; use `--allow-shadow` only for an intentional separate shim. No existing executable is replaced.
 
-## Verification record
+## Historical implementation verification record
 
 Verified on macOS with the optimized Kujo isolation candidate:
 
