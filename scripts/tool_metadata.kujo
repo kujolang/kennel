@@ -1,7 +1,7 @@
 # Reuse the native TOML parser for OS integration metadata.
-values := args()
-metadata := parse_toml(read_file(values[len(values) - 1]))
-if len(values) > 1 && values[0] == "--version" {
+metadata_args := args()
+metadata := parse_toml(read_file(metadata_args[len(metadata_args) - 1]))
+if len(metadata_args) > 1 && metadata_args[0] == "--version" {
     print("Kennel " + metadata["package"]["version"])
 } else {
     print(to_json(metadata))

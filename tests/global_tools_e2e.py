@@ -16,9 +16,10 @@ with tempfile.TemporaryDirectory(prefix='kennel-global-e2e-') as temporary:
     (folder/'src').mkdir()
     (folder/'src/cli_adapter.kujo').write_text('print("CALLER CLI MUST NOT LOAD")\nexit(93)\n')
     env={**os.environ,'HOME':str(user),'KUJO_BIN':kujo,'KENNEL_HOME':str(base)}
-    def run(*args,expected=0,cwd=folder):
+    def run(*args,expected=0,cwd=folder,quiet=False):
         result=subprocess.run(list(map(str,args)),env=env,cwd=cwd,text=True,capture_output=True)
         assert result.returncode==expected,(args,result.returncode,result.stdout,result.stderr)
+        if quiet:assert not result.stderr,result.stderr
         return result.stdout
     setup=[sys.executable,ROOT/'scripts/install.py','--source',ROOT]
     run(*setup)
@@ -29,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='kennel-global-e2e-') as temporary:
     env['PATH']=str(base/'bin')+os.pathsep+env['PATH']
     run(kennel,'help')
     assert 'Kennel' in run(kennel)
-    assert run(kennel,'--version').strip() == 'Kennel 1.1.0'
+    assert run(kennel,'--version',quiet=True).strip() == 'Kennel 1.1.0'
     source=folder/'global-demo';source.mkdir()
     def manifest(version):
         (source/'kennel.toml').write_text(f'[package]\nname="global-demo"\nversion="{version}"\n[kujo]\nentry="main.kujo"\n[bin]\nglobal-demo="main.kujo"\nglobal-exit="exit.kujo"\n')

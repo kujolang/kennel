@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kujo
-          ref: 87287c2e91e8dd3f70210d67e0e42b428897ffe9 # Reviewed installed-tool import isolation
+          ref: dd7d39d868d4b73c49c35a925339dec15951deaf # Reviewed installed-tool import isolation
           path: kujo-src
 
       - name: Setup Rust
