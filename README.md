@@ -85,7 +85,7 @@ Toolchain assumptions:
 - A Kujo build with `--isolated-imports` support, available as `kujo` or overridden with `KUJO_BIN` (currently unreleased; see the candidate instructions above)
 - Bash available for verification scripts
 
-> Note: the current CLI surface includes `help`; a dedicated `version` flag is not implemented yet.
+The installed launcher supports `kennel --version`. Direct `kujo run kennel.kujo` retains the existing native CLI contract.
 
 ## Security Posture Summary
 
