@@ -47,13 +47,13 @@ Provenance binds package/version, archive hash, exact source commit/tag, reposit
 Commands use Kujo 1.3.1, `/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/release/kujo`.
 
 - Baseline core passed. Baseline full was interrupted by host process exhaustion; not claimed passing.
-- The first post-production full-profile rerun stopped on a Git process spawn with `Resource temporarily unavailable (os error 35)`; a retry is tracked separately from passed results.
+- The first post-production full-profile rerun stopped on a Git process spawn with `Resource temporarily unavailable (os error 35)`; the unchanged full-profile retry passed with exit 0 (`/tmp/kennel-full-production-retry.log`).
 - Existing implementation verification: core and full profiles passed; security profile passed; split contracts 29/29 core, 7/7 registry index, 18/18 hosted; aggregate contracts 34/34. Earlier failed attempts are retained in the temporary logs described in Git history.
 - `bash scripts/verify-registry-packages.sh` after the extraction performance fix: 5/5 Kujo tests and 9/9 Python tests, exit 0. Includes deterministic packaging, immutable rejection, archive attacks/padding, provenance tampering, cache corruption and locked replay.
 - ShipCheck gate: 16/16, no errors/warnings. JSON Schema validation: six index/package/version documents and three provenance statements passed.
 - `python3 scripts/registry/verify_deployment.py ../kennel-registry/registry`: exit 0, production index and every immutable archive digest verified.
 - `KUJO_BIN=/path/to/kujo-1.3.1 python3 scripts/registry/production_e2e.py`: exit 0. Default, exact, cached and clean installs pass for **changebucket 1.0.0 and kennel 1.0.1**, with checksum/provenance verification, extraction and locked replay. No consumer GitHub source URL.
-- Live CLI `search changebucket` and `info changebucket`: exit 0, official registry results.
+- Live CLI `search changebucket` and `info changebucket`: exit 0, official registry results. The portable `bin/kennel` launcher also passed literal `kennel init` and `kennel add changebucket` production checks; `sh -n bin/kennel` passed.
 
 Measured end-to-end wall-clock seconds, one production sample per operation:
 
