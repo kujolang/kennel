@@ -101,6 +101,25 @@ class RegistryTests(unittest.TestCase):
         r=self.kujo('from src.registry_protocol import registry_verify_provenance\nregistry_verify_provenance(parse_json(read_file('+json.dumps(str(request))+')))',{'HOME':str(home)})
         self.assertNotEqual(r.returncode,0);self.assertIn('provenance mismatch',r.stdout+r.stderr)
 
+    def test_reviewed_manifest_projection_is_commit_and_digest_bound(self):
+        source=self.git('show',self.commit+':kennel.toml').encode()
+        self.policy['packages']['fixture']['release_manifests']={self.commit:{'source_manifest':'kennel.toml','source_manifest_sha256':__import__('hashlib').sha256(source).hexdigest(),'source_package':'fixture','description':'fixture','entry':'main.kujo'}}
+        m,a=self.build()
+        p=json.loads(a['provenance.json'])
+        self.assertEqual(p['manifest_projection']['source_manifest_sha256'],__import__('hashlib').sha256(source).hexdigest())
+        with tarfile.open(fileobj=io.BytesIO(a['package.tar.gz']),mode='r:gz') as t:
+            self.assertEqual(t.getnames().count('kennel.toml'),1)
+            self.assertEqual(t.extractfile('main.kujo').read(),b'print("fixture")\n')
+        self.assertEqual(self.extract(a['package.tar.gz']).returncode,0)
+        self.policy['packages']['fixture']['release_manifests'][self.commit]['source_manifest_sha256']='0'*64
+        with self.assertRaisesRegex(ValueError,'digest mismatch'):self.build()
+
+    def test_manifest_projection_does_not_retarget_dependency_commits(self):
+        source=self.git('show',self.commit+':kennel.toml').encode()
+        projection={'source_manifest':'kennel.toml','source_manifest_sha256':__import__('hashlib').sha256(source).hexdigest(),'source_package':'fixture','description':'fixture','entry':'main.kujo','dependency_releases':{'missing':{'original':{'source':'github:kujolang/dep','commit':'a'*40},'package':'dep','version':'1.0.0','commit':'a'*40}}}
+        self.policy['packages']['fixture']['release_manifests']={self.commit:projection}
+        with self.assertRaisesRegex(ValueError,'does not match release source'):self.build()
+
     def test_prerelease_precedence_is_numeric(self):
         self.assertGreater(version_key('1.0.0-rc.10'), version_key('1.0.0-rc.9'))
         self.assertGreater(version_key('1.0.0'),version_key('1.0.0-rc.10'))

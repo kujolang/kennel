@@ -49,25 +49,82 @@ def matches(path, patterns):
     return any(p == '.' or path == p.rstrip('/') or path.startswith(p.rstrip('/') + '/') or fnmatch.fnmatchcase(path, p) for p in patterns)
 
 
+def toml_document(document):
+    """Canonical TOML for reviewed release-manifest projection (no null values)."""
+    lines = []
+    def emit(table, path):
+        if path:
+            lines.append('[' + '.'.join(json.dumps(k) for k in path) + ']')
+        for key, value in sorted(table.items()):
+            if not isinstance(value, dict):
+                if value is None:
+                    raise ValueError('Null is not a TOML value')
+                lines.append(json.dumps(key) + ' = ' + json.dumps(value, ensure_ascii=True))
+        for key, value in sorted(table.items()):
+            if isinstance(value, dict):
+                emit(value, path + [key])
+    emit(document, [])
+    return ('\n'.join(lines) + '\n').encode()
+
+
 def build(repo, commit, release, policy, workflow, base):
     commit = git(repo, 'rev-parse', '--verify', commit + '^{commit}').decode().strip()
     legacy = None
     synthetic_manifest = None
     tracked = git(repo, 'ls-tree', '--name-only', commit).decode().splitlines()
-    if 'kennel.toml' in tracked:
-        manifest = tomllib.loads(git(repo, 'show', commit + ':kennel.toml').decode())
+    projections = [(n, p.get('release_manifests', {}).get(commit)) for n, p in policy['packages'].items() if p.get('repository') == release['repository']]
+    projections = [(n, p) for n, p in projections if p]
+    projection = None
+    if projections:
+        if len(projections) != 1:
+            raise ValueError('Ambiguous release manifest projection')
+        name, projection = projections[0]
+        source = projection.get('source_manifest')
+        source_bytes = git(repo, 'show', commit + ':' + source) if source else b''
+        if digest(source_bytes) != projection['source_manifest_sha256']:
+            raise ValueError('Release manifest projection source digest mismatch')
+        original = tomllib.loads(source_bytes.decode()) if source else {}
+        manifest = json.loads(json.dumps(original))
+        package = manifest.setdefault('package', dict(original.get('project', {})))
+        if package.get('name', name) != projection.get('source_package', name):
+            raise ValueError('Unexpected source package identity')
+        version = release['tag_name'].removeprefix('v')
+        if package.get('version', version) != version:
+            raise ValueError('Source manifest version differs from actual release')
+        package.update(name=name, version=version)
+        package.setdefault('description', projection['description'])
+        package.setdefault('license', projection.get('license', ''))
+        controls = manifest.setdefault('kujo', {})
+        controls.setdefault('entry', projection.get('entry', ''))
+        controls.setdefault('sources', ['.'])
+        dependencies = manifest.setdefault('dependencies', {})
+        for dep, target in projection.get('dependency_releases', {}).items():
+            declared = dependencies.get(dep)
+            if declared != target['original']:
+                raise ValueError('Dependency projection does not match release source')
+            approved = policy['packages'].get(target['package'], {})
+            if target['commit'] != approved.get('release_commits', {}).get(target['version']):
+                raise ValueError('Dependency commit is not an approved release')
+            pinned = declared.get('commit', declared.get('ref', ''))
+            if pinned != target['commit'] or declared.get('source') != 'github:' + approved['repository']:
+                raise ValueError('Dependency release changes the pinned source')
+            dependencies[dep] = {'source': 'registry:' + base + '/api/v1/packages/' + target['package'] + '/' + target['version'] + '.json'}
+        synthetic_manifest = toml_document(manifest)
     else:
-        allowed = [(n, p.get('legacy_releases', {}).get(commit)) for n, p in policy['packages'].items() if p.get('repository') == release['repository']]
-        allowed = [(n, p) for n, p in allowed if p]
-        if len(allowed) != 1:
-            raise ValueError('Release has no kennel.toml and no commit-pinned legacy packaging policy')
-        name, legacy = allowed[0]
-        original = tomllib.loads(git(repo, 'show', commit + ':' + legacy['source_manifest']).decode())
-        if original['package']['name'] != legacy['source_package'] or original.get('dependencies', {}):
-            raise ValueError('Unexpected legacy package identity/dependencies')
-        version = original['package']['version']
-        synthetic_manifest = ('[package]\nname = ' + json.dumps(name) + '\nversion = ' + json.dumps(version) + '\ndescription = ' + json.dumps(legacy['description']) + '\nlicense = ""\n[kujo]\nentry = ' + json.dumps(legacy['entry']) + '\nsources = ["."]\n[dependencies]\n').encode()
-        manifest = tomllib.loads(synthetic_manifest.decode())
+        if 'kennel.toml' in tracked:
+            manifest = tomllib.loads(git(repo, 'show', commit + ':kennel.toml').decode())
+        else:
+            allowed = [(n, p.get('legacy_releases', {}).get(commit)) for n, p in policy['packages'].items() if p.get('repository') == release['repository']]
+            allowed = [(n, p) for n, p in allowed if p]
+            if len(allowed) != 1:
+                raise ValueError('Release has no kennel.toml and no commit-pinned legacy packaging policy')
+            name, legacy = allowed[0]
+            original = tomllib.loads(git(repo, 'show', commit + ':' + legacy['source_manifest']).decode())
+            if original['package']['name'] != legacy['source_package'] or original.get('dependencies', {}):
+                raise ValueError('Unexpected legacy package identity/dependencies')
+            version = original['package']['version']
+            synthetic_manifest = ('[package]\nname = ' + json.dumps(name) + '\nversion = ' + json.dumps(version) + '\ndescription = ' + json.dumps(legacy['description']) + '\nlicense = ""\n[kujo]\nentry = ' + json.dumps(legacy['entry']) + '\nsources = ["."]\n[dependencies]\n').encode()
+            manifest = tomllib.loads(synthetic_manifest.decode())
     package = manifest['package']
     name, version = package['name'], package['version']
     if not NAME.fullmatch(name) or not VERSION.fullmatch(version):
@@ -107,6 +164,8 @@ def build(repo, commit, release, policy, workflow, base):
         if path.lower() in seen or kind != 'blob' or mode not in ('100644', '100755'):
             raise ValueError(f'Unsupported link/submodule or colliding file: {path}')
         seen.add(path.lower())
+        if path == 'kennel.toml' and synthetic_manifest is not None:
+            continue
         data = git(repo, 'cat-file', 'blob', oid)
         total += len(data)
         if total > MAX_EXPANDED - 1024 * MAX_FILES or len(files) >= MAX_FILES:
@@ -134,6 +193,8 @@ def build(repo, commit, release, policy, workflow, base):
     provenance = {'schema_version': 1, 'package': name, 'version': version, 'source_commit': commit, 'source_tag': release['tag_name'], 'repository': repository, 'repository_id': release['repository_id'], 'release_id': release['id'], 'released_at': release['published_at'], 'published_at': workflow['published_at'], 'workflow_run': workflow['run'], 'workflow_ref': workflow['ref'], 'workflow_sha': workflow['sha'], 'archive_sha256': digest(blob), 'builder': 'kennel-ustar-gzip-v1'}
     if legacy:
         provenance['legacy_packaging'] = {'source_manifest': legacy['source_manifest'], 'source_package': legacy['source_package'], 'generated_file': 'kennel.toml', 'generated_file_sha256': digest(synthetic_manifest)}
+    if projection:
+        provenance['manifest_projection'] = {'source_manifest': projection.get('source_manifest'), 'source_manifest_sha256': projection['source_manifest_sha256'], 'generated_file': 'kennel.toml', 'generated_file_sha256': digest(synthetic_manifest), 'dependency_releases': projection.get('dependency_releases', {})}
     provenance_bytes = canonical(provenance)
     metadata = {'schema_version': 1, 'package': name, 'version': version, 'scope': None, 'owner': {'type': 'organization', 'id': 'kujolang'}, 'official': True, 'description': package.get('description', ''), 'license': package.get('license', ''), 'released_at': release['published_at'], 'source_commit': commit, 'source_tag': release['tag_name'], 'archive_url': prefix + '/package.tar.gz', 'archive_sha256': digest(blob), 'archive_size': len(blob), 'file_count': len(files), 'provenance_url': prefix + '/provenance.json', 'provenance_sha256': digest(provenance_bytes), 'checksum_url': prefix + '/checksums.txt', 'dependencies': manifest.get('dependencies', {}), 'minimum_kujo_version': controls.get('minimum_version', ''), 'repository': repository, 'repository_id': release['repository_id'], 'release_id': release['id']}
     return metadata, {'package.tar.gz': blob, 'manifest.json': canonical(metadata), 'provenance.json': provenance_bytes, 'checksums.txt': f'{digest(blob)}  package.tar.gz\n{digest(provenance_bytes)}  provenance.json\n'.encode()}

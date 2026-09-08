@@ -42,6 +42,8 @@ def sync(root, policy_path, only_package='', only_release=''):
         for release in sorted(releases,key=lambda r:r['id']):
             if release['draft'] or only_release and str(release['id']) != only_release:
                 continue
+            if entry.get('backfill_release_ids') is not None and release['id'] not in entry['backfill_release_ids'] and release['published_at'] < entry['enrolled_at']:
+                continue
             version=release['tag_name'].removeprefix('v')
             if not VERSION.fullmatch(version):
                 raise ValueError('Published release has invalid SemVer tag')
