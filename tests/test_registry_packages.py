@@ -63,6 +63,14 @@ class RegistryTests(unittest.TestCase):
         for label,blob in [('manifest case',self.archive('KENNEL.TOML')),('traversal',self.archive('../evil')),('absolute',self.archive('/evil')),('symlink',self.archive(kind=tarfile.SYMTYPE)),('hardlink',self.archive(kind=tarfile.LNKTYPE)),('setuid',self.archive(mode=0o4755)),('gzip',b'bad'),('truncated',gzip.compress(b'x'*512)),('excess padding',gzip.compress(gzip.decompress(self.archive())+b'\0'*10240))]:
             with self.subTest(label=label):
                 result=self.extract(blob,1);self.assertNotEqual(result.returncode,0,result.stdout);self.assertFalse((self.root/'stage').exists())
+    def test_ustar_terminator_can_cross_a_record_boundary(self):
+        raw=io.BytesIO()
+        with tarfile.open(fileobj=raw,mode='w',format=tarfile.USTAR_FORMAT) as t:
+            info=tarfile.TarInfo('kennel.toml');info.size=9216;t.addfile(info,io.BytesIO(b'x'*9216))
+        self.assertEqual(len(raw.getvalue())-9728,10752)
+        result=self.extract(gzip.compress(raw.getvalue()),1)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
     def test_corrupt_header_and_duplicate_paths(self):
         b=bytearray(gzip.decompress(self.archive()));b[0]=ord('z')
         self.assertNotEqual(self.extract(gzip.compress(b),1).returncode,0)

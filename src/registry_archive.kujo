@@ -54,7 +54,7 @@ export func extract_registry_archive(blob, staging, expected_count) {
 		# Keep repeated indexed reads bounded to one header-sized buffer.
 		header := slice(data, position, position + 512)
 		if header[0] == 0 {
-			if len(data) - position < 1024 || len(data) - position > 10240 {
+			if len(data) - position < 1024 || len(data) - position > 10752 {
 				throw("Invalid archive terminator length")
 			}
 			tail := slice(data, position, len(data))
