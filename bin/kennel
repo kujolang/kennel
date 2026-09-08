@@ -1,4 +1,15 @@
 #!/bin/sh
 set -eu
 KENNEL_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
+    exec "${KUJO_BIN:-kujo}" run "$KENNEL_ROOT/scripts/tool_metadata.kujo" --interpreter -- --version "$KENNEL_ROOT/kennel.toml"
+fi
+if [ "${1:-}" = "self" ] && [ "${2:-}" = "update" ]; then
+    shift 2
+    exec "${PYTHON_BIN:-python3}" "$KENNEL_ROOT/scripts/install.py" --no-modify-path "$@"
+fi
+if [ "${1:-}" = "tool" ]; then
+    shift
+    exec "${PYTHON_BIN:-python3}" "$KENNEL_ROOT/scripts/tool_manager.py" "$@"
+fi
 exec "${KUJO_BIN:-kujo}" run "$KENNEL_ROOT/kennel.kujo" --interpreter -- "$@"
