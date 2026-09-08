@@ -115,7 +115,7 @@ def copy_source(source, target):
         if not name or any(part in {'.git','.kennel_tmp','kennel_packages','node_modules'} for part in Path(name).parts):
             continue
         path=source/name
-        if path.is_symlink():
+        if any(candidate.is_symlink() for candidate in [path, *path.parents] if candidate != source and source in candidate.parents):
             raise ValueError('Source install cannot include symbolic links: '+name)
         if path.is_file():
             dest=target/name; dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(path,dest)

@@ -4,4 +4,5 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 python3 -m unittest discover -s tests -p 'test_global_tools.py'
 python3 tests/global_tools_e2e.py
+python3 tests/bootstrap_release_e2e.py
 echo '[verify-global-tools] success'
