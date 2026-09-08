@@ -47,7 +47,7 @@ kennel tool remove shipcheck
 
 An unversioned install resolves the latest stable package; an exact request remains exact on update. Use `tool install NAME@VERSION` again to change a pin. Each global package gets a separate project and deterministic lockfile under `~/.kennel/tools/generation-*`. The original package manager installs its dependencies there. Global operations never modify the caller's project manifest or lockfile.
 
-Command shims live in `~/.kennel/bin`. They look up one atomically replaced `tools.json` record and run the verified package entry with Kujo. Arguments, exit status and the caller's working directory are preserved. Locked dependency roots are passed to the runtime. Existing `KUJO_MODULE_PATH` is not inherited by global tools, avoiding accidental environment-level dependency substitution. Tools run with the user's normal permissions, not in a sandbox.
+Command shims live in `~/.kennel/bin`. They look up one atomically replaced `tools.json` record and run the verified package entry with Kujo or its declared supported script interpreter. Arguments, exit status and the caller's working directory are preserved. Locked dependency roots are passed to the runtime. Existing `KUJO_MODULE_PATH` is not inherited by global tools, avoiding accidental environment-level dependency substitution. Tools run with the user's normal permissions, not in a sandbox.
 
 `[bin]` explicitly declares commands:
 
@@ -57,7 +57,7 @@ my-tool = "main.kujo"
 my-other-command = "cli/other.kujo"
 ```
 
-The publisher validates that each entry is a packaged `.kujo` file. Global activation rejects unsafe names, missing entries, traversal, symlinks and reserved runtime/shell names. For historical packages with no `[bin]`, an explicit `tool install` uses `[kujo].entry` and the package name. This does not make libraries globally executable when installed with `kennel add`. Packages with no executable entry fail with guidance to use project dependencies.
+The publisher validates that each entry is a packaged `.kujo` file or executable script with a supported sh, Bash or Python 3 shebang. Global activation rejects unsafe names, missing entries, traversal, symlinks and reserved runtime/shell names. For historical packages with no `[bin]`, an explicit `tool install` uses `[kujo].entry` and the package name. This does not make libraries globally executable when installed with `kennel add`. Packages with no executable entry fail with guidance to use project dependencies.
 
 `--command NAME` renames a single-entry tool. Commands belonging to another globally installed package cannot be overwritten. Unmanaged files in the Kennel bin directory are never overwritten. A command already elsewhere on PATH requires `--allow-shadow`; this only permits a new Kennel shim and does not edit the other executable.
 

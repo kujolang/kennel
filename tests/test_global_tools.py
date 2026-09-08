@@ -64,6 +64,14 @@ class GlobalTests(unittest.TestCase):
         self.assertEqual(tools.command_map(self.base,{'package':{'name':'demo'},'kujo':{'entry':'main.kujo'}}),{'demo':'main.kujo'})
         self.assertEqual(tools.command_map(self.base,{'bin':{'one':'main.kujo','two':'main.kujo'}}),{'one':'main.kujo','two':'main.kujo'})
         with self.assertRaises(ValueError):tools.command_map(self.base,{'package':{'name':'library'}})
+    def test_supported_script_entry(self):
+        target=self.base/'script';target.write_text('#!/usr/bin/env bash\nprintf "%s" "$1"\n');target.chmod(0o755)
+        self.assertEqual(tools.safe_entry(self.base,'script'),'script')
+        self.assertEqual(tools.entry_argv(target),['/bin/bash',str(target)])
+        target.chmod(0o644)
+        with self.assertRaises(ValueError):tools.safe_entry(self.base,'script')
+        target.chmod(0o755);target.write_text('#!/usr/bin/env arbitrary-program\n')
+        with self.assertRaises(ValueError):tools.safe_entry(self.base,'script')
     def test_entry_traversal_symlinks_and_reserved_commands(self):
         (self.base/'main.kujo').write_text('print(1)');(self.base/'linked.kujo').symlink_to(self.base/'main.kujo')
         for entry in ['../main.kujo','/main.kujo','linked.kujo','missing.kujo','x.sh']:

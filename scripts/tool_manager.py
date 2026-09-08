@@ -77,13 +77,29 @@ def safe_entry(package, entry):
     if not isinstance(entry, str) or not entry or '\\' in entry or any(ord(c)<32 for c in entry):
         raise ValueError('Invalid tool entry path')
     path = PurePosixPath(entry)
-    if path.is_absolute() or '..' in path.parts or not entry.endswith('.kujo'):
-        raise ValueError('Tool entries must be relative .kujo files without traversal')
+    if path.is_absolute() or '..' in path.parts:
+        raise ValueError('Tool entries must be relative packaged files without traversal')
     target = package.joinpath(*path.parts)
     if any(p.is_symlink() for p in [target, *target.parents]) or not target.is_file():
         raise ValueError('Tool entry must be a regular packaged file: '+entry)
     target.resolve().relative_to(package.resolve())
+    if target.suffix != ".kujo":
+        entry_argv(target)
     return entry
+
+
+def entry_argv(target):
+    if target.suffix == '.kujo':
+        return [runtime(), 'run', str(target), '--interpreter', '--']
+    with target.open('rb') as source:
+        shebang = source.readline(256).rstrip(b'\r\n')
+    interpreters = {b'#!/bin/sh': '/bin/sh', b'#!/usr/bin/env sh': '/bin/sh',
+                    b'#!/bin/bash': '/bin/bash', b'#!/usr/bin/env bash': '/bin/bash',
+                    b'#!/usr/bin/env python3': shutil.which('python3'), b'#!/usr/bin/python3': shutil.which('python3')}
+    interpreter = interpreters.get(shebang)
+    if not interpreter or not target.stat().st_mode & 0o111:
+        raise ValueError('Entry must be .kujo or an executable sh/bash/python3 script with a supported shebang')
+    return [interpreter, str(target)]
 
 
 def command_map(package, manifest, command=None):
@@ -214,8 +230,8 @@ def run_tool(base, command, args):
             entry = safe_entry(package, record['commands'][command])
             env = os.environ.copy()
             env['KUJO_MODULE_PATH'] = os.pathsep.join(record['module_roots'])
-            executable = runtime()
-            os.execve(executable, [executable, 'run', str(package/entry), '--interpreter', '--', *args], env)
+            invocation = entry_argv(package/entry)
+            os.execve(invocation[0], [*invocation, *args], env)
     raise ValueError('Global command is not installed: '+command)
 
 
