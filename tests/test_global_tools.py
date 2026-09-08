@@ -53,7 +53,7 @@ class GlobalTests(unittest.TestCase):
         with self.assertRaises(ValueError):installer.fetch('https://evil.example/x',10)
     def test_checksum_mismatch_stops_before_extraction(self):
         m={'schema_version':1,'package':'kennel','version':'2.0.0','official':True,'scope':None,
-           'owner':{'type':'organization','id':'kujolang'},'archive_url':installer.REGISTRY+'/archive',
+           'owner':{'type':'organization','id':'kujolang'},'repository':'kujolang/kennel','repository_id':1264528549,'archive_url':installer.REGISTRY+'/archive',
            'archive_size':3,'archive_sha256':'0'*64}
         with patch.object(installer,'fetch',side_effect=[json.dumps(m).encode(),b'bad']),\
                 patch.object(installer,'extract') as extraction,self.assertRaisesRegex(ValueError,'checksum'):

@@ -74,6 +74,7 @@ def extract(data, target):
             with archive.extractfile(member) as source, path.open('xb') as dest:
                 shutil.copyfileobj(source,dest)
             path.chmod(0o755 if member.mode & 0o111 else 0o644)
+        return len(entries)
 
 
 def download_client(version, target):
@@ -85,6 +86,7 @@ def download_client(version, target):
     manifest = json.loads(fetch(REGISTRY+'/api/v1/packages/kennel/'+version+'.json', 1024*1024))
     if (manifest.get('schema_version')!=1 or manifest.get('package')!='kennel'
             or manifest.get('version')!=version or manifest.get('official') is not True
+            or manifest.get('repository')!='kujolang/kennel' or manifest.get('repository_id')!=1264528549
             or manifest.get('scope') is not None or manifest.get('owner')!={'type':'organization','id':'kujolang'}):
         raise ValueError('Invalid official Kennel release identity')
     archive = fetch(manifest['archive_url'], MAX_ARCHIVE)
@@ -100,7 +102,8 @@ def download_client(version, target):
     for key in ['package','version','source_commit','source_tag','repository','repository_id','release_id','archive_sha256']:
         if provenance.get(key)!=manifest.get(key):
             raise ValueError('Kennel provenance identity mismatch: '+key)
-    extract(archive,target)
+    if extract(archive,target)!=manifest['file_count']:
+        raise ValueError('Kennel archive file count mismatch')
     return {'version':version,'archive_sha256':sha(archive),'registry':REGISTRY}
 
 
