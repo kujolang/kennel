@@ -6,4 +6,4 @@ permissions:
   contents: read
 jobs:
   package:
-    uses: kujolang/kennel/.github/workflows/build-kennel-release.yml@5ba774c2cf4a6b40a10a335cf5ef5d184dce4f03
+    uses: kujolang/kennel/.github/workflows/build-kennel-release.yml@996619aeafbcb816e7cc0351ee78b71944233384
