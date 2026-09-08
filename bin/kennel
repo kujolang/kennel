@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+KENNEL_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "${KUJO_BIN:-kujo}" run "$KENNEL_ROOT/kennel.kujo" --interpreter -- "$@"

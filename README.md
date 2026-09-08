@@ -10,7 +10,11 @@ Official first-party distribution is available through the versioned HTTPS proto
 
 ## Official Kennel Registry
 
-Use Kujo **1.3.1 or newer** for native HTTPS archive installation:
+Use the updated client from this checkout with Kujo **1.3.1 or newer** for native HTTPS archive installation. Add its launcher to your shell PATH (historical releases predate this support):
+
+```bash
+export PATH="/path/to/kennel/bin:$PATH"
+```
 
 ```bash
 kennel init --name demo
