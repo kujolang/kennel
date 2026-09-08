@@ -4,6 +4,7 @@ import argparse
 import html
 import json
 import shutil
+from onboarding import generate_onboarding
 from pathlib import Path
 from build_package import canonical, digest, VERSION
 
@@ -18,7 +19,7 @@ def esc(v):
 
 
 def page(title, content, path='', description='Official released packages for Kujo.'):
-    return f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(title)} · Kennel</title><meta name="description" content="{esc(description)}"><link rel="canonical" href="https://kennel.kujolang.ai/{esc(path)}"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><script src="/search.js" defer></script><script src="/assets/registry-ui.js" defer></script></head><body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="/"><img src="/assets/kujo-logomark.svg" alt="" width="32" height="32">Kennel</a><button class="mobile-menu" type="button" aria-controls="main-nav" aria-expanded="false" aria-label="Open menu" hidden></button><nav id="main-nav" aria-label="Main"><a href="/">Packages</a><a href="/api/v1/index.json">Registry JSON</a><a href="https://kujolang.ai">Kujo ↗</a></nav></header><main id="main">{content}</main><footer>Official Kujo package registry. Released source, immutable artifacts.<br>Development happens on GitHub. Distribution happens here.</footer></body></html>'
+    return f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(title)} · Kennel</title><meta name="description" content="{esc(description)}"><link rel="canonical" href="https://kennel.kujolang.ai/{esc(path)}"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><script src="/search.js" defer></script><script src="/assets/registry-ui.js" defer></script></head><body><a class="skip" href="#main">Skip to content</a><header><a class="brand" href="/"><img src="/assets/kujo-logomark.svg" alt="" width="32" height="32">Kennel</a><button class="mobile-menu" type="button" aria-controls="main-nav" aria-expanded="false" aria-label="Open menu" hidden></button><nav id="main-nav" aria-label="Main"><a href="/">Packages</a><a href="/getting-started">Install Kennel</a><a href="/api/v1/index.json">Registry JSON</a><a href="https://kujolang.ai">Kujo ↗</a></nav></header><main id="main">{content}</main><footer>Official Kujo package registry. Released source, immutable artifacts.<br>Development happens on GitHub. Distribution happens here.</footer></body></html>'
 
 
 def version_key(version):
@@ -83,6 +84,7 @@ def generate(root):
     (root/'404.html').write_text(page('Package not found','<h1>Package not found.</h1><p><a href="/">Browse official packages</a></p>'))
     (root/'robots.txt').write_text('User-agent: *\nAllow: /\n')
     (root/'_headers').write_text('/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Content-Security-Policy: default-src \'self\'; object-src \'none\'; base-uri \'none\'; frame-ancestors \'none\'\n/api/v1/*\n  Content-Type: application/json\n  Cache-Control: public, max-age=60\n/packages/*\n  Cache-Control: public, max-age=31536000, immutable\n')
+    generate_onboarding(root, page)
     print(json.dumps({'packages':len(summaries),'index_bytes':(root/'api/v1/index.json').stat().st_size}))
 
 

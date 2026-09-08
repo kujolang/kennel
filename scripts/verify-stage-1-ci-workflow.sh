@@ -46,6 +46,10 @@ required_patterns=(
 	"BENCH_DRY_RUN: '1'"
 	"bash ./scripts/verify-benchmark-harness.sh"
 	"- security"
+	"- full"
+	"Verify anonymous production installs"
+	"python3 scripts/registry/production_e2e.py"
+	"python3 scripts/registry/global_tools_production_e2e.py"
 	"set -euo pipefail"
 )
 

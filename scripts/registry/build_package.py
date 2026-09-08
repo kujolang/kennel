@@ -175,6 +175,21 @@ def build(repo, commit, release, policy, workflow, base):
         files.append(('kennel.toml', synthetic_manifest, 0o644))
     if not any(p == 'kennel.toml' for p, _, _ in files):
         raise ValueError('Package must include kennel.toml')
+    commands = manifest.get('bin', {})
+    if not isinstance(commands, dict):
+        raise ValueError('[bin] must map command names to packaged executable entries')
+    packaged_paths = {path for path, _, _ in files}
+    for command, entrypoint in commands.items():
+        if not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', command) or not isinstance(entrypoint, str):
+            raise ValueError('Invalid executable command declaration')
+        safe_path(entrypoint)
+        if entrypoint not in packaged_paths:
+            raise ValueError('Executable entry is not included in package: '+entrypoint)
+        if not entrypoint.endswith('.kujo'):
+            _, content, mode = next(f for f in files if f[0] == entrypoint)
+            shebang = content.split(b'\n', 1)[0].rstrip(b'\r')
+            if mode != 0o755 or shebang not in {b'#!/bin/sh',b'#!/usr/bin/env sh',b'#!/bin/bash',b'#!/usr/bin/env bash',b'#!/usr/bin/env python3',b'#!/usr/bin/python3'}:
+                raise ValueError('Unsupported executable entry: '+entrypoint)
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode='w', format=tarfile.USTAR_FORMAT) as archive:
         for path, data, mode in sorted(files):

@@ -40,8 +40,15 @@ export func registry_cache_root() {
 	if trim(home) == "" {
 		throw("HOME is required for the Kennel artifact cache")
 	}
-	root := home + "/.kennel/cache/sha256"
-	for part in [home + "/.kennel", home + "/.kennel/cache", root] {
+	base := trim(env("KENNEL_HOME"))
+	if base == "" {
+		base = home + "/.kennel"
+	}
+	if starts_with(base, "/") == false {
+		throw("KENNEL_HOME must be an absolute directory")
+	}
+	root := base + "/cache/sha256"
+	for part in [base, base + "/cache", root] {
 		if (path_exists(part) && path_is_symlink(part)) {
 			throw("Refusing symlinked Kennel cache directory")
 		}

@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kujo
+          ref: dd7d39d868d4b73c49c35a925339dec15951deaf # Reviewed installed-tool import isolation
           path: kujo-src
 
       - name: Setup Rust
@@ -75,6 +76,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kujo
+          ref: dd7d39d868d4b73c49c35a925339dec15951deaf # Reviewed installed-tool import isolation
           path: kujo-src
 
       - name: Setup Rust
@@ -164,6 +166,7 @@ jobs:
           - stage2
           - stage3
           - security
+          - full
 
     steps:
       - name: Checkout kennel
@@ -188,3 +191,12 @@ jobs:
         run: |
           set -euo pipefail
           bash ./scripts/verify-profiles.sh "${{ matrix.profile }}"
+
+      - name: Verify anonymous production installs
+        if: matrix.profile == 'full'
+        env:
+          KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
+        run: |
+          set -euo pipefail
+          python3 scripts/registry/production_e2e.py
+          python3 scripts/registry/global_tools_production_e2e.py

@@ -10,11 +10,30 @@ Official first-party distribution is available through the versioned HTTPS proto
 
 ## Official Kennel Registry
 
-Use the updated client from this checkout with Kujo **1.3.1 or newer** for native HTTPS archive installation. Add its launcher to your shell PATH (historical releases predate this support):
+**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports`. The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
+
+
+The **1.1.0 release candidate** adds global commands and a per-user installer. It is not yet an official release. Review on macOS/Linux with Kujo **1.3.1+**, Python **3.9+** and Git:
 
 ```bash
-export PATH="/path/to/kennel/bin:$PATH"
+python3 scripts/install.py --source .
+. "$HOME/.kennel/env"
+kennel --version
+kennel tool install shipcheck
+shipcheck --help
 ```
+
+The source installer copies tracked checkout files, including reviewed local edits. For an isolated review without shell profile changes, use `--home /absolute/review-directory --no-modify-path` and invoke its `bin/kennel`. `KUJO_BIN` selects a non-default Kujo executable; keep it set when invoking the installed tools if Kujo is not otherwise on PATH.
+
+After the first installer-enabled release, users can download the registry installer:
+
+```bash
+curl -fsSLO https://kennel.kujolang.ai/install.sh
+sh install.sh
+. "$HOME/.kennel/env"
+```
+
+The installer checks Kujo, verifies the official package archive and provenance, and activates the client atomically. Historical releases are rejected with an explanation. It never installs an unreleased main branch implicitly. See [global tools and installer](docs/global-tools.md) for commands, PATH setup, updates and removal.
 
 ```bash
 kennel init --name demo
@@ -63,10 +82,10 @@ Validated in current project automation:
 
 Toolchain assumptions:
 
-- Kujo 1.0.0 or newer available as `kujo` or overridden with `KUJO_BIN`
+- A Kujo build with `--isolated-imports` support, available as `kujo` or overridden with `KUJO_BIN` (currently unreleased; see the candidate instructions above)
 - Bash available for verification scripts
 
-> Note: the current CLI surface includes `help`; a dedicated `version` flag is not implemented yet.
+The installed launcher supports `kennel --version`. Direct `kujo run kennel.kujo` retains the existing native CLI contract.
 
 ## Security Posture Summary
 
