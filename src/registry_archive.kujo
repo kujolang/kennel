@@ -51,20 +51,24 @@ export func extract_registry_archive(blob, staging, expected_count) {
 	terminated := false
 	manifest_found := false
 	while position + 512 <= len(data) {
-		if data[position] == 0 {
-			if len(data) - position < 1024 {
-				throw("Truncated archive terminator")
+		# Keep repeated indexed reads bounded to one header-sized buffer.
+		header := slice(data, position, position + 512)
+		if header[0] == 0 {
+			if len(data) - position < 1024 || len(data) - position > 10240 {
+				throw("Invalid archive terminator length")
 			}
-			while position < len(data) {
-				if data[position] != 0 {
+			tail := slice(data, position, len(data))
+			tail_position := 0
+			while tail_position < len(tail) {
+				if tail[tail_position] != 0 {
 					throw("Unexpected trailing archive content")
 				}
-				position = position + 1
+				tail_position = tail_position + 1
 			}
 			terminated = true
 			break
 		}
-		if tar_text(data, position + 257, 6) != "ustar" || tar_text(data, position + 263, 2) != "00" {
+		if tar_text(header, 257, 6) != "ustar" || tar_text(header, 263, 2) != "00" {
 			throw("Only normalized USTAR packages are supported")
 		}
 		check := 0
@@ -73,19 +77,19 @@ export func extract_registry_archive(blob, staging, expected_count) {
 			if i >= 148 && i < 156 {
 				check = check + 32
 			} else {
-				check = check + data[position + i]
+				check = check + header[i]
 			}
 			i = i + 1
 		}
-		if check != tar_octal(data, position + 148, 8) {
+		if check != tar_octal(header, 148, 8) {
 			throw("Archive header checksum mismatch")
 		}
-		kind := data[position + 156]
+		kind := header[156]
 		if kind != 48 && kind != 0 {
 			throw("Archive links, directories, devices and extension headers are forbidden")
 		}
-		name := tar_text(data, position, 100)
-		prefix := tar_text(data, position + 345, 155)
+		name := tar_text(header, 0, 100)
+		prefix := tar_text(header, 345, 155)
 		if prefix != "" {
 			name = prefix + "/" + name
 		}
@@ -96,11 +100,11 @@ export func extract_registry_archive(blob, staging, expected_count) {
 			throw("Duplicate archive path")
 		}
 		seen[lower] := true
-		mode := tar_octal(data, position + 100, 8)
+		mode := tar_octal(header, 100, 8)
 		if mode != 420 && mode != 493 {
 			throw("Unsafe archive permissions")
 		}
-		size := tar_octal(data, position + 124, 12)
+		size := tar_octal(header, 124, 12)
 		start := position + 512
 		if size > 67108864 || start + size > len(data) || len(entries) >= 10000 {
 			throw("Archive size or entry limit exceeded")

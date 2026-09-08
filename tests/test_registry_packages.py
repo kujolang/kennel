@@ -60,7 +60,7 @@ class RegistryTests(unittest.TestCase):
         self.release['repository_id']=1;self.release['draft']=True
         with self.assertRaises(ValueError):self.build()
     def test_traversal_absolute_links_modes_invalid_gzip(self):
-        for label,blob in [('manifest case',self.archive('KENNEL.TOML')),('traversal',self.archive('../evil')),('absolute',self.archive('/evil')),('symlink',self.archive(kind=tarfile.SYMTYPE)),('hardlink',self.archive(kind=tarfile.LNKTYPE)),('setuid',self.archive(mode=0o4755)),('gzip',b'bad'),('truncated',gzip.compress(b'x'*512))]:
+        for label,blob in [('manifest case',self.archive('KENNEL.TOML')),('traversal',self.archive('../evil')),('absolute',self.archive('/evil')),('symlink',self.archive(kind=tarfile.SYMTYPE)),('hardlink',self.archive(kind=tarfile.LNKTYPE)),('setuid',self.archive(mode=0o4755)),('gzip',b'bad'),('truncated',gzip.compress(b'x'*512)),('excess padding',gzip.compress(gzip.decompress(self.archive())+b'\0'*10240))]:
             with self.subTest(label=label):
                 result=self.extract(blob,1);self.assertNotEqual(result.returncode,0,result.stdout);self.assertFalse((self.root/'stage').exists())
     def test_corrupt_header_and_duplicate_paths(self):
