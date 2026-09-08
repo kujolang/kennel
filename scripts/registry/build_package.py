@@ -175,6 +175,16 @@ def build(repo, commit, release, policy, workflow, base):
         files.append(('kennel.toml', synthetic_manifest, 0o644))
     if not any(p == 'kennel.toml' for p, _, _ in files):
         raise ValueError('Package must include kennel.toml')
+    commands = manifest.get('bin', {})
+    if not isinstance(commands, dict):
+        raise ValueError('[bin] must map command names to packaged .kujo entries')
+    packaged_paths = {path for path, _, _ in files}
+    for command, entrypoint in commands.items():
+        if not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', command) or not isinstance(entrypoint, str):
+            raise ValueError('Invalid executable command declaration')
+        safe_path(entrypoint)
+        if not entrypoint.endswith('.kujo') or entrypoint not in packaged_paths:
+            raise ValueError('Executable entry is not included in package: '+entrypoint)
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode='w', format=tarfile.USTAR_FORMAT) as archive:
         for path, data, mode in sorted(files):
