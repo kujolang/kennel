@@ -82,7 +82,7 @@ Validated in current project automation:
 
 Toolchain assumptions:
 
-- Kujo 1.0.0 or newer available as `kujo` or overridden with `KUJO_BIN`
+- A Kujo build with `--isolated-imports` support, available as `kujo` or overridden with `KUJO_BIN` (currently unreleased; see the candidate instructions above)
 - Bash available for verification scripts
 
 > Note: the current CLI surface includes `help`; a dedicated `version` flag is not implemented yet.

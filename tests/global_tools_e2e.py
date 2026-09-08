@@ -12,7 +12,9 @@ ROOT=Path(__file__).resolve().parent.parent
 kujo=shutil.which(os.environ.get('KUJO_BIN','kujo'))
 if not kujo:raise SystemExit('KUJO_BIN or kujo is required')
 with tempfile.TemporaryDirectory(prefix='kennel-global-e2e-') as temporary:
-    folder=Path(temporary).resolve();user=folder/'user home';user.mkdir();base=user/'.kennel'
+    folder=Path(temporary).resolve();user=folder/"user's home";user.mkdir();base=user/'.kennel'
+    (folder/'src').mkdir()
+    (folder/'src/cli_adapter.kujo').write_text('print("CALLER CLI MUST NOT LOAD")\nexit(93)\n')
     env={**os.environ,'HOME':str(user),'KUJO_BIN':kujo,'KENNEL_HOME':str(base)}
     def run(*args,expected=0,cwd=folder):
         result=subprocess.run(list(map(str,args)),env=env,cwd=cwd,text=True,capture_output=True)
