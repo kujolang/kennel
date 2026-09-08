@@ -1,59 +1,69 @@
-# Static registry implementation and acceptance status
+# Static registry production acceptance
 
-As of 2026-09-07: implementation and real-release backfill are committed and pushed. **Production acceptance is blocked, not complete.** GitHub requires interactive verification before the existing Cloudflare app can receive access to the new registry repository.
+2026-09-08: **the static registry is live at https://kennel.kujolang.ai and real package installation passes.** Consumers provide package names, not GitHub source URLs. Acceptance used the updated Kennel client on main and Kujo 1.3.1. Historical Kennel releases retain their original behavior; no test release or replacement artifact was created.
 
-## Architecture and client
+## Architecture and Kennel changes
 
-The read side is versioned static JSON plus immutable USTAR/gzip artifacts. GitHub remains the development and Release authority. Separate public repository: https://github.com/kujolang/kennel-registry. Pages will serve its `registry/` directory directly, with no build, server, database, Worker or R2.
+GitHub remains the development and Release authority. The separate public [kennel-registry repository](https://github.com/kujolang/kennel-registry) contains generated static distribution files. Cloudflare Pages serves `registry/` directly, with no build command, application server, database, Worker or R2.
 
-Kennel adds centralized official HTTPS default resolution, shared stable SemVer selection, exact versions and existing opt-in ranges, anonymous search/info/read/install, bounded downloads, digest/provenance consistency checks, verified digest cache, strict staged extraction and schema-1 lock replay. Existing local/source/custom-index and local hosted auth/trust commands remain. Runtime requirement: Kujo 1.3.1 for native bounded HTTP/byte/archive primitives. The old installed runtime is insufficient; verification used the local Kujo 1.3.1 release build.
+Kennel provides a centralized official HTTPS default, anonymous search/info/resolution/install, shared stable SemVer selection and existing opt-in ranges, exact-version URLs, bounded downloads, digest/provenance consistency checks, a verified content-addressed cache, strict archive staging, and deterministic schema-1 lock replay. Existing local/source/custom-index and local hosted auth/trust commands remain.
 
-Protocol, schema and package format details: [protocol](protocol.md), [JSON schemas](../contracts/registry-v1-version.schema.json), [publisher](publishing.md). Human pages and Markdown are generated from the same exact metadata. Local browser checks passed for homepage layout, filtering and package navigation. No production browser result is claimed.
+## Protocol, site and package format
 
-## Releases and automation
+[Protocol](protocol.md) and [JSON schemas](../contracts/registry-v1-version.schema.json) define discovery at `/api/v1/index.json`, per-package metadata at `/api/v1/packages/<name>.json`, and exact release metadata at `/api/v1/packages/<name>/<version>.json`. Immutable artifacts live at `/packages/<name>/<version>/`: package.tar.gz, manifest.json, checksums.txt and provenance.json. Human package/version pages and Markdown are generated from those records; the CLI never scrapes HTML.
 
-Only Kennel and Changebucket are enabled. Actual GitHub Actions backfill [34081283600](https://github.com/kujolang/kennel-registry/actions/runs/34081283600) built and committed these real releases in registry commit `8c52c19`:
+The builder reads exact tracked Git blobs at the released tag commit, applies explicit source/include/exclude controls and mandatory exclusions, sorts paths, and normalizes USTAR uid/gid/timestamps/permissions and gzip metadata. [Publishing details](publishing.md). No expanded source-tree deployment, proprietary format or fabricated SBOM.
 
-| Package | Version | Release ID | Compressed bytes | Files |
+## Release automation and backfill
+
+Small `release.published` callers use the central builder. Registry-owned scheduled reconciliation independently consumes actual Release API records, verifies approved repository names and immutable IDs, builds through the same path, and writes one atomic commit using its own GITHUB_TOKEN. GitHub disables deploy keys; none were created and no personal token is used. Publishing is nominally every 15 minutes, subject to scheduling delays.
+
+[Run 34250625389](https://github.com/kujolang/kennel-registry/actions/runs/34250625389) passed the complete reconciliation and production archive-verification workflow. Callers pin central workflow `161d5e5`; publisher tooling is pinned to `aa0e552`. New client archive performance fixes do not change published package bytes.
+
+Only these real releases are enrolled/backfilled:
+
+| Package | Version | GitHub Release ID | Compressed bytes | Files |
 | --- | --- | --- | --- | --- |
 | changebucket | 1.0.0 | 367136441 | 21,265 | 17 |
 | kennel | 1.0.0 | 367138335 | 126,287 | 165 |
 | kennel | 1.0.1 | 379486187 | 135,012 | 168 |
 
-No release was created for testing. Changebucket's historical ChangeBudget identity is documented in the exact-commit policy and provenance. No missing license or SBOM was fabricated.
+Original backfill commit: `kennel-registry@8c52c19`. Changebucket v1.0.0 still used the ChangeBudget name; its commit-specific policy generates only a distribution manifest and records the adaptation in provenance. Released code is unchanged and its missing license is not invented. [Wider enrollment review](enrollment-review.md) identifies candidates; no additional repositories were automatically enrolled.
 
-Release-published callers build through the central workflow. Registry-owned scheduled reconciliation uses the same builder and its own GITHUB_TOKEN to commit atomically; deploy keys are disabled by GitHub policy and none were provisioned. No personal token is used. Callers are pinned to reviewed workflow commit `3b9c419`; package tooling is pinned to `25319f2`. Workflow provenance records the executing workflow ref/SHA. Scheduled publication is nominally every 15 minutes, subject to GitHub scheduling delays.
+## Cloudflare
 
-The backfill run's final deployment verification failed because the domain is not configured; its successful registry commit does not imply successful production deployment.
+Pages project `kennel-registry` (ID `618df53e-08cf-41d2-9424-ba213e19eb21`) is Git-connected to `kujolang/kennel-registry`, production branch `main`, no build command, output `registry`. Settings are recorded in that repository's `cloudflare-pages.json`.
 
-## Cloudflare and production acceptance
-
-Existing account/kujolang.ai zone were inspected. At inspection, no Kennel Pages project and no conflicting kennel DNS record existed. The Pages Git setup is open with the kujolang account selected. Its existing app currently exposes only the commerce repository. GitHub API access cannot modify this installation (403); browser administration is gated by GitHub's Confirm access verification. The user was asked to complete verification; no credential was requested or handled.
-
-After verification: grant the existing Cloudflare app access to `kujolang/kennel-registry`, select it in Pages, configure `main`, no build command, output `registry`, then add `kennel.kujolang.ai`. Verify DNS/TLS, deployment, human pages, exact JSON and archives. Run `KUJO_BIN=/path/to/kujo-1.3.1 python3 scripts/registry/production_e2e.py`, then dispatch registry verification again. This acceptance script performs default, exact, cached and clean installs for both official packages in isolated projects/cache and records elapsed install times.
+`kennel.kujolang.ai` is an active proxied CNAME to `kennel-registry.pages.dev`. Cloudflare reports domain verification and certificate validation active. HTTPS requests verify normally without disabling certificate checks. Initial deployment `49484b03-a103-43a3-9177-95351c6707fb` succeeded. A subsequent Git push at registry commit `674a92b` automatically deployed successfully as `57893195-711c-4fee-a7c3-e8741908a3cb`. Production homepage, Changebucket package/version pages and a 390px mobile layout were checked in-browser. Live JSON and every archive digest pass the deployment verifier.
 
 ## Security and provenance
 
-[Threat model](threat-model.md) records trust boundaries, review corrections and mitigations. SHA-256 verification fails closed, including cache reads; extraction rejects traversal, links, unsafe modes, malformed headers and oversized contents. Ownership/repository IDs and released tag commits are explicit. Provenance is an integrity-checked statement from the trusted registry, **not independent cryptographic proof**. Optional signed attestations remain future work.
+[Threat model](threat-model.md) records trust boundaries and mitigations. SHA-256 failures stop installation, including corrupted cache reads. USTAR accepts bounded regular files, safe portable paths and normalized permissions; links, traversal, duplicate/case-colliding paths, malformed headers and excessive padding fail. Headers validate before staging and existing installation displacement. A production performance defect in repeated archive-byte indexing was fixed by reading one 512-byte header at a time; hostile-archive fixtures still pass.
 
-## Verification
+Provenance binds package/version, archive hash, exact source commit/tag, repository/Release IDs and publishing workflow identity through a trusted HTTPS registry statement. It is **not independent cryptographic workflow proof**. Signed archive attestations remain an additive future capability. Explicit ownership and scoped identity schemas allow future accounts/authenticated publishing to replace the write implementation without changing consumer URLs or lock semantics.
 
-Commands use `PATH=/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/release:/Library/Frameworks/Python.framework/Versions/3.10/bin:$PATH`.
+## Tests and production E2E
 
-- Baseline core: passed. Baseline full: interrupted by host process exhaustion; not claimed passing.
-- `bash scripts/verify-all.sh core`: exit 0, passed (`/tmp/kennel-core-final.log`).
-- `bash scripts/verify-profiles.sh full`: exit 0, passed (`/tmp/kennel-full-final.log`). Includes split contracts: 29/29 core, 7/7 registry index, 18/18 hosted.
-- New registry tests in full: 5/5 Kujo and 9/9 Python passed. Deterministic packaging, immutability, archive rejection, provenance tampering, locked replay and cache corruption covered.
-- `bash scripts/verify-profiles.sh security`: exit 0, passed (`/tmp/kennel-security-final.log`).
-- Final `bash scripts/verify-registry-packages.sh`: 5/5 Kujo, 9/9 Python, exit 0 (`/tmp/kennel-registry-final.log`).
-- `kujo test-run -v tests/kennel_contract_tests.kujo`: exit 0, 34/34 passed (`/tmp/kennel-monolithic-verbose.log`). An earlier nonverbose attempt reported 25/34; unchanged verbose rerun passed. Host process exhaustion also affected earlier runs, so the failed attempt is retained rather than erased.
-- ShipCheck gate: exit 0; 16/16 checks, zero errors/warnings (`/tmp/kennel-shipcheck-gate.json`).
-- JSON Schema validation: all six real index/package/version documents plus three provenance statements passed.
-- Native anonymous HTTPS read of committed registry JSON through GitHub raw hosting: passed. This is a transport test, not production Kennel domain acceptance.
-- Real Changebucket artifact cached installation and locked replay: passed offline, with exact release bytes. Not a production download.
+Commands use Kujo 1.3.1, `/Users/robertdevore/2026/Kujolang/kujo-repos/kujo/target/release/kujo`.
 
-## Performance and remaining work
+- Baseline core passed. Baseline full was interrupted by host process exhaustion; not claimed passing.
+- The first post-production full-profile rerun stopped on a Git process spawn with `Resource temporarily unavailable (os error 35)`; a retry is tracked separately from passed results.
+- Existing implementation verification: core and full profiles passed; security profile passed; split contracts 29/29 core, 7/7 registry index, 18/18 hosted; aggregate contracts 34/34. Earlier failed attempts are retained in the temporary logs described in Git history.
+- `bash scripts/verify-registry-packages.sh` after the extraction performance fix: 5/5 Kujo tests and 9/9 Python tests, exit 0. Includes deterministic packaging, immutable rejection, archive attacks/padding, provenance tampering, cache corruption and locked replay.
+- ShipCheck gate: 16/16, no errors/warnings. JSON Schema validation: six index/package/version documents and three provenance statements passed.
+- `python3 scripts/registry/verify_deployment.py ../kennel-registry/registry`: exit 0, production index and every immutable archive digest verified.
+- `KUJO_BIN=/path/to/kujo-1.3.1 python3 scripts/registry/production_e2e.py`: exit 0. Default, exact, cached and clean installs pass for **changebucket 1.0.0 and kennel 1.0.1**, with checksum/provenance verification, extraction and locked replay. No consumer GitHub source URL.
+- Live CLI `search changebucket` and `info changebucket`: exit 0, official registry results.
 
-Global index: 909 bytes. Changebucket package discovery: 619 bytes; Kennel: 857 bytes. Package sizes are above. Resolution reads per-package metadata instead of the whole index. Archive/provenance caching is digest-addressed. Production latency, uncached/cached installation timing and lock generation timing remain unmeasured until deployment. ETag metadata caching is not implemented; transport caps and artifact caching are implemented.
+Measured end-to-end wall-clock seconds, one production sample per operation:
 
-Concrete remaining acceptance work: Cloudflare app verification/access, Pages Git connection/custom domain, DNS/TLS checks, production installs and timings. Wider enrollment is intentionally deferred pending those results; see [inventory review](enrollment-review.md). Accounts, scoped authenticated publishing and private packages are not implemented. Explicit scope/owner schemas and stable read/artifact URLs allow a future API/object-storage write path without changing CLI or lock identities.
+| Package | Default uncached | Exact | Cached lock replay | Clean cache/project |
+| --- | --- | --- | --- | --- |
+| changebucket | 2.435 | 1.639 | 0.501 | 2.169 |
+| kennel | 3.810 | 3.694 | 1.923 | 8.106 |
+
+Global index: 909 bytes; package discovery: 619 bytes Changebucket / 857 bytes Kennel. Native Changebucket resolution measured 1.320485s; lock writing 22.933ms for 1,778 bytes. Rewriting the same resolved lock produced identical bytes. Timings are local samples, not latency guarantees. Logs: `/tmp/kennel-production-e2e-final.log`, `/tmp/kennel-deployment-final.log`, `/tmp/kennel-protocol-benchmark.log`, `/tmp/kennel-registry-final-20260908.log`.
+
+## Remaining limitations
+
+The new client is on main; existing immutable Kennel releases predate remote support and require an updated client plus Kujo 1.3.1. Normal release management can distribute that client later. ETag metadata caching and independent signed archive attestations are not implemented. Accounts, third-party publishing, private packages and moderation are intentionally absent. Wider enrollment requires release/package review. No production deployment or installation blocker remains.
