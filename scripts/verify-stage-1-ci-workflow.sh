@@ -46,6 +46,7 @@ required_patterns=(
 	"BENCH_DRY_RUN: '1'"
 	"bash ./scripts/verify-benchmark-harness.sh"
 	"- security"
+	"- full"
 	"set -euo pipefail"
 )
 
