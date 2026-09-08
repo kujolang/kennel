@@ -4,6 +4,9 @@ Status: 1.1.0 release candidate, not published. The latest historical release re
 
 ## Review before release
 
+**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports`. The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
+
+
 From this checkout:
 
 ```sh
@@ -47,7 +50,7 @@ kennel tool remove shipcheck
 
 An unversioned install resolves the latest stable package; an exact request remains exact on update. Use `tool install NAME@VERSION` again to change a pin. Each global package gets a separate project and deterministic lockfile under `~/.kennel/tools/generation-*`. The original package manager installs its dependencies there. Global operations never modify the caller's project manifest or lockfile.
 
-Command shims live in `~/.kennel/bin`. They look up one atomically replaced `tools.json` record and run the verified package entry with Kujo or its declared supported script interpreter. Arguments, exit status and the caller's working directory are preserved. Locked dependency roots are passed to the runtime. Existing `KUJO_MODULE_PATH` is not inherited by global tools, avoiding accidental environment-level dependency substitution. Tools run with the user's normal permissions, not in a sandbox.
+Command shims live in `~/.kennel/bin`. They look up one atomically replaced `tools.json` record and run the verified package entry with Kujo or its declared supported script interpreter. Arguments, exit status and the caller's working directory are preserved. Locked dependency roots are passed to the runtime, with the main tool first. `--isolated-imports` excludes the caller directory and its lockfile from module discovery; the policy is inherited by packaged script entry points that invoke Kujo. Existing `KUJO_MODULE_PATH` is not inherited by global tools, avoiding accidental environment-level dependency substitution. Tools run with the user's normal permissions, not in a sandbox.
 
 `[bin]` explicitly declares commands:
 

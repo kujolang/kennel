@@ -26,16 +26,22 @@ with tempfile.TemporaryDirectory(prefix='kennel-global-e2e-') as temporary:
     kennel=base/'bin/kennel'
     env['PATH']=str(base/'bin')+os.pathsep+env['PATH']
     run(kennel,'help')
+    assert 'Kennel' in run(kennel)
+    assert run(kennel,'--version').strip() == 'Kennel 1.1.0'
     source=folder/'global-demo';source.mkdir()
     def manifest(version):
         (source/'kennel.toml').write_text(f'[package]\nname="global-demo"\nversion="{version}"\n[kujo]\nentry="main.kujo"\n[bin]\nglobal-demo="main.kujo"\nglobal-exit="exit.kujo"\n')
     manifest('1.0.0')
-    (source/'main.kujo').write_text('print(to_json({"cwd": os_getcwd(), "args": args()}))\n')
+    (source/'helper.kujo').write_text('export value := "installed module"\n')
+    (folder/'helper.kujo').write_text('print("WORKSPACE MODULE MUST NOT EXECUTE")\nexport value := "workspace"\n')
+    (source/'main.kujo').write_text('from helper import value\nassert(value == "installed module")\nprint(to_json({"cwd": os_getcwd(), "args": args()}))\n')
     (source/'exit.kujo').write_text('exit(7)\n')
     spec='file:'+str(source)
     run(kennel,'tool','install',spec)
     result=json.loads(run(base/'bin/global-demo','space argument','--flag','"quote"'))
     assert result=={'cwd':str(folder),'args':['space argument','--flag','"quote"']},result
+    assert json.loads(run(base/'bin/global-demo'))['args']==[]
+    assert json.loads(run(base/'bin/global-demo','a\x1fb'))['args']==['a\x1fb']
     run(base/'bin/global-exit',expected=7)
     assert 'global-demo 1.0.0' in run(kennel,'tool','list')
     manifest('1.1.0');run(kennel,'tool','update','global-demo')

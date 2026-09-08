@@ -3,6 +3,7 @@
 import argparse
 import contextlib
 import fcntl
+from functools import lru_cache
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -27,17 +28,20 @@ def home():
     return result
 
 
+@lru_cache(maxsize=1)
 def runtime():
     value = os.environ.get('KUJO_BIN', 'kujo')
     found = shutil.which(value)
     if not found:
         raise ValueError('Kujo 1.3.1+ is required; install Kujo or set KUJO_BIN')
+    if '--isolated-imports' not in subprocess.check_output([found, 'run', '--help'], text=True):
+        raise ValueError('This Kujo runtime lacks --isolated-imports; use the updated Kujo source build until its next release')
     return str(Path(found).absolute())
 
 
 def native(*args, capture=False):
-    result = subprocess.run([runtime(), 'run', str(ROOT/'kennel.kujo'), '--interpreter', '--', *map(str,args)],
-                            capture_output=capture, text=True)
+    result = subprocess.run([runtime(), 'run', str(ROOT/'kennel.kujo'), '--interpreter', '--isolated-imports', '--', *map(str,args)],
+                            capture_output=capture, text=True, env={**os.environ, 'KUJO_MODULE_PATH': str(ROOT), 'KUJO_ISOLATED_IMPORTS': '1'})
     if result.returncode:
         raise ValueError((result.stderr or result.stdout or 'Kennel dependency operation failed').strip())
     return result.stdout
@@ -90,7 +94,7 @@ def safe_entry(package, entry):
 
 def entry_argv(target):
     if target.suffix == '.kujo':
-        return [runtime(), 'run', str(target), '--interpreter', '--']
+        return [runtime(), 'run', str(target), '--interpreter', '--isolated-imports', '--']
     with target.open('rb') as source:
         shebang = source.readline(256).rstrip(b'\r\n')
     interpreters = {b'#!/bin/sh': '/bin/sh', b'#!/usr/bin/env sh': '/bin/sh',
@@ -210,7 +214,7 @@ def install(base, spec, command=None, allow_shadow=False):
             roots.append(str(stage.joinpath(*parts)))
         selected = next(p for p in entries if p['name']==name)
         record = {'spec': spec, 'version': source['package']['version'], 'generation': stage.name,
-                  'commands': commands, 'command_override': command, 'module_roots': roots,
+                  'commands': commands, 'command_override': command, 'module_roots': [str(package)]+[r for r in roots if r!=str(package)],
                   'lock': selected}
         state = load_state(base)
         activate(base, state, name, record, allow_shadow)
@@ -230,6 +234,10 @@ def run_tool(base, command, args):
             entry = safe_entry(package, record['commands'][command])
             env = os.environ.copy()
             env['KUJO_MODULE_PATH'] = os.pathsep.join(record['module_roots'])
+            env['KUJO_ISOLATED_IMPORTS'] = '1'
+            env['KUJO_BIN'] = runtime()
+            env.pop('KUJO_SCRIPT_ARGS_JSON', None)
+            env.pop('KUJO_SCRIPT_ARGS', None)
             invocation = entry_argv(package/entry)
             os.execve(invocation[0], [*invocation, *args], env)
     raise ValueError('Global command is not installed: '+command)

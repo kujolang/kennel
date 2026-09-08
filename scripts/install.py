@@ -166,6 +166,8 @@ def main(argv=None):
     match=re.search(r'(\d+)\.(\d+)\.(\d+)',version)
     if not match or tuple(map(int,match.groups()))<(1,3,1):
         raise ValueError('Kujo 1.3.1+ is required; installed runtime: '+version.strip())
+    if '--isolated-imports' not in subprocess.check_output([kujo,'run','--help'],text=True):
+        raise ValueError('This Kujo runtime lacks --isolated-imports. Build the updated Kujo source or wait for its next release before installing Kennel 1.1.0.')
     base=args.home.expanduser().absolute()
     if any(p.is_symlink() for p in [base,*base.parents]):
         raise ValueError('Installation directory must not traverse symbolic links')
@@ -198,7 +200,7 @@ def main(argv=None):
                 if not (stage/relative).is_file():
                     raise ValueError('Incomplete Kennel client: '+relative)
             (stage/'bin/kennel').chmod(0o755)
-            subprocess.run([kujo,'run',str(stage/'kennel.kujo'),'--interpreter','--','help'],check=True,stdout=subprocess.DEVNULL)
+            subprocess.run([kujo,'run',str(stage/'kennel.kujo'),'--interpreter','--isolated-imports','--','help'],check=True,stdout=subprocess.DEVNULL,env={**os.environ,'KUJO_MODULE_PATH':str(stage),'KUJO_ISOLATED_IMPORTS':'1'})
             (stage/'install-receipt.json').write_text(json.dumps(receipt,sort_keys=True,indent=2)+'\n')
             # Profiles are prepared before activation; existing installations remain intact on failure.
             if not args.no_modify_path:

@@ -36,8 +36,8 @@ python3 "$installer_dir/install.py" "$@"
                     ready = marker.get('installer_protocol') == 1
                 except KeyError:
                     pass
-    notice = '' if ready else '<p class="badge">Release preview — the first installer-enabled Kennel release is pending.</p><p>The installer is ready for review but will reject historical releases. Maintainers can test <code>python3 scripts/install.py --source .</code> from the current Kennel checkout. No new release has been published.</p>'
-    body = '<p class="eyebrow">Getting started</p><h1>Install once.<br>Use everywhere.</h1>'+notice+'''<p>Requires macOS or Linux, <a href="https://kujolang.ai/ecosystem/kujo/">Kujo 1.3.1+</a>, Python 3.9+ and curl. No administrator access is needed. The installer adds ~/.kennel/bin to Bash, Zsh and POSIX shell profiles.</p><h2>Install Kennel</h2><pre><code>curl -fsSLO https://kennel.kujolang.ai/install.sh
+    notice = '' if ready else '<p class="badge">Release preview — the first installer-enabled Kennel release is pending.</p><p>The installer is ready for review but requires a Kujo build with --isolated-imports support and will reject historical Kennel releases. Maintainers can test <code>python3 scripts/install.py --source .</code> from the current Kennel checkout. No new release has been published.</p>'
+    body = '<p class="eyebrow">Getting started</p><h1>Install once.<br>Use everywhere.</h1>'+notice+'''<p>Requires macOS or Linux, <a href="https://kujolang.ai/ecosystem/kujo/">Kujo with --isolated-imports support</a>, Python 3.9+ and curl. No administrator access is needed. The installer adds ~/.kennel/bin to Bash, Zsh and POSIX shell profiles.</p><h2>Install Kennel</h2><pre><code>curl -fsSLO https://kennel.kujolang.ai/install.sh
 sh install.sh
 . "$HOME/.kennel/env"
 kennel --version</code></pre><p>You can inspect install.sh and <a href="/install.py">install.py</a> before running them. Use <code>sh install.sh --no-modify-path</code> to configure PATH yourself. Fish users can run <code>fish_add_path ~/.kennel/bin</code>.</p><h2>Global tools</h2><pre><code>kennel tool install shipcheck
