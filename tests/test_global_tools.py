@@ -118,6 +118,10 @@ class GlobalTests(unittest.TestCase):
         code='. '+str(self.base/'.profile')+'; . '+str(self.base/'.profile')+'; printf "%s" "$PATH"'
         result=subprocess.check_output(['/bin/sh','-c',code],env={'PATH':'/usr/bin:/bin'},text=True)
         self.assertEqual(result.count(str(base/'bin')),1)
+    def test_world_writable_installation_directories_are_rejected(self):
+        target=self.base/'unsafe';target.mkdir();target.chmod(0o777)
+        for manager in [installer,tools]:
+            with self.subTest(manager=manager),self.assertRaises(ValueError):manager.managed_directory(target)
     def test_profile_symlink_rejected(self):
         (self.base/'.profile').symlink_to(self.base/'elsewhere')
         with self.assertRaises(ValueError):installer.setup_path(self.base,self.base)

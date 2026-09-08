@@ -20,11 +20,18 @@ NAME = re.compile(r'[a-z][a-z0-9_-]{0,63}\Z')
 RESERVED = {'kennel', 'kujo', 'sh', 'bash', 'zsh', 'fish', 'python', 'python3', 'env'}
 
 
+def managed_directory(path):
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if path.is_symlink() or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o022:
+        raise ValueError('Installation directories must be user-owned and not group/world writable: '+str(path))
+    return path
+
+
 def home():
     result = Path(os.environ.get('KENNEL_HOME', str(Path.home()/'.kennel'))).expanduser().absolute()
     if any(p.is_symlink() for p in [result, *result.parents]):
         raise ValueError('KENNEL_HOME must not traverse symbolic links')
-    result.mkdir(parents=True, exist_ok=True, mode=0o700)
+    managed_directory(result)
     return result
 
 
@@ -137,7 +144,7 @@ def owned(path, expected):
 
 def activate(base, state, name, record, allow_shadow=False):
     bindir = base/'bin'
-    bindir.mkdir(exist_ok=True)
+    managed_directory(bindir)
     if bindir.is_symlink():
         raise ValueError('Global bin directory cannot be a symbolic link')
     for command in record['commands']:
@@ -180,7 +187,7 @@ def install(base, spec, command=None, allow_shadow=False):
         spec = 'file:'+str(Path(spec).expanduser().resolve())
     # One isolated generation per install. Old generations remain for running processes.
     generations = base/'tools'
-    generations.mkdir(exist_ok=True)
+    managed_directory(generations)
     if generations.is_symlink():
         raise ValueError('Tool storage cannot be a symbolic link')
     stage = Path(tempfile.mkdtemp(prefix='generation-', dir=generations))

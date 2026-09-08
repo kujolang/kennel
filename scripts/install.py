@@ -160,6 +160,13 @@ def setup_path(base, user_home):
             path.write_text(updated)
 
 
+def managed_directory(path):
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if path.is_symlink() or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o022:
+        raise ValueError('Installation directories must be user-owned and not group/world writable: '+str(path))
+    return path
+
+
 def main(argv=None):
     parser=argparse.ArgumentParser(description='Install Kennel for macOS/Linux. Requires Kujo 1.3.1+, Python 3.9+, and curl.')
     group=parser.add_mutually_exclusive_group()
@@ -182,11 +189,11 @@ def main(argv=None):
     base=args.home.expanduser().absolute()
     if any(p.is_symlink() for p in [base,*base.parents]):
         raise ValueError('Installation directory must not traverse symbolic links')
-    base.mkdir(parents=True,exist_ok=True,mode=0o700)
+    managed_directory(base)
     with (base/'.tools.lock').open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX)
-        clients=base/'clients';clients.mkdir(exist_ok=True)
-        bindir=base/'bin';bindir.mkdir(exist_ok=True)
+        clients=managed_directory(base/'clients')
+        bindir=managed_directory(base/'bin')
         if clients.is_symlink() or bindir.is_symlink():
             raise ValueError('Installation subdirectories cannot be symbolic links')
         launcher=bindir/'kennel'
