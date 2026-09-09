@@ -14,6 +14,13 @@ func check(argv, expected, settings, cwd) {
     return result.stdout
 }
 try {
+    # Fail if any consumer operation tries to invoke the old Python helpers.
+    trap_bin := folder + "/no-python"; ensure_dir(trap_bin)
+    for executable in ["python", "python3"] {
+        write_file(trap_bin + "/" + executable, "#!/bin/sh\necho Python must not be invoked >&2\nexit 99\n")
+        io_set_permissions(trap_bin + "/" + executable, 493)
+    }
+    settings["PATH"] = trap_bin + ":" + env("PATH")
     setup := [runtime, "run", root + "/scripts/install.kujo", "--interpreter", "--isolated-imports", "--", "--source", root]
     check(setup, 0, settings, folder)
     before := read_file(user + "/.zshrc")

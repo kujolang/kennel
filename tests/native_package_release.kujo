@@ -1,9 +1,14 @@
-from src.registry_package import package_build, package_publish, package_git
+from src.registry_package import package_build, package_publish, package_git, package_matches
 from src.bootstrap import bootstrap_install_release
 from src.global_common import global_delete
 from src.utils import ensure_dir
 mut root := create_temp_dir(path_absolute("/tmp"), "kennel-release-test-")
 try {
+    assert_true(package_matches("src/a.kujo", ["src/[!b-z].kujo"]))
+    assert_false(package_matches("src/b.kujo", ["src/[!b-z].kujo"]))
+    assert_true(package_matches("src/[draft.kujo", ["src/[draft.kujo"]))
+    assert_true(package_matches("src/].kujo", ["src/[]].kujo"]))
+    assert_true(package_matches("src/x/a.kujo", ["src/*.kujo"]))
     mut repo := root + "/repo"; ensure_dir(repo)
     package_git(repo, ["init", "-q"])
     package_git(repo, ["config", "user.email", "fixture@example.invalid"])
@@ -26,6 +31,13 @@ try {
     mut failed := false
     try { bootstrap_install_release(built["metadata"], bytes([0]), built["artifacts"]["provenance.json"], root + "/bad") } except err { failed = true }
     assert_true(failed); assert_false(path_exists(root + "/bad"))
+    mut wrong_provenance := parse_json(decode_charset(built["artifacts"]["provenance.json"], "utf-8", 1048576))
+    wrong_provenance["release_id"] = 2
+    mut wrong_bytes := decode_base64(encode_base64(to_json(wrong_provenance)))
+    mut wrong_doc := built["metadata"]; wrong_doc["provenance_sha256"] = sha256(wrong_bytes)
+    failed = false
+    try { bootstrap_install_release(wrong_doc, built["artifacts"]["package.tar.gz"], wrong_bytes, root + "/bad-provenance") } except err { failed = true }
+    assert_true(failed); assert_false(path_exists(root + "/bad-provenance"))
     mut changed := built; mut metadata := built["metadata"]; metadata["archive_sha256"] = repeat("0", 64); changed["metadata"] = metadata
     failed = false; try { package_publish(root + "/registry", changed) } except err { failed = true }; assert_true(failed)
     print("Native release packaging, deterministic artifacts, immutable publication, bootstrap validation and checksum failure: passed")
