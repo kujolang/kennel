@@ -1,0 +1,17 @@
+from src.registry_transport import registry_get
+mut root := args()[0]
+mut expected := read_file(root + "/api/v1/index.json")
+mut attempt := 0
+while attempt < 40 {
+    try {
+        if registry_get("https://kennel.kujolang.ai/api/v1/index.json", 1048576)["body"] != expected { throw("Deployment has not caught up") }
+        for name in list_dir(root + "/packages") {
+            for version in list_dir(root + "/packages/" + name) {
+                mut manifest := json_file_read(root + "/packages/" + name + "/" + version + "/manifest.json", 1048576)
+                if sha256(registry_get(manifest["archive_url"], 8388608)["_body_bytes"]) != manifest["archive_sha256"] { throw("Deployed artifact digest mismatch") }
+            }
+        }
+        print("Production index and all immutable archive digests verified"); break
+    } except err { if attempt == 39 { throw(err) }; print("Waiting for Pages: " + to_string(err)); sleep(15000) }
+    attempt = attempt + 1
+}

@@ -1,0 +1,3 @@
+from src.registry_site import site_generate
+if len(args()) != 1 { throw("Usage: generate_registry.kujo REGISTRY_ROOT") }
+site_generate(env("KUJO_MODULE_PATH"), args()[0])

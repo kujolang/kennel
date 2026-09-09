@@ -1,0 +1,1 @@
+const input=document.querySelector('#search');if(input)input.addEventListener('input',()=>{let n=0;for(const item of document.querySelectorAll('[data-package]')){item.hidden=!item.textContent.toLowerCase().includes(input.value.toLowerCase());if(!item.hidden)n++;}document.querySelector('#count').textContent=n+' packages';});

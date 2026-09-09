@@ -10,8 +10,8 @@ import tempfile
 import unittest
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts/registry'))
-from build_package import build, publish, digest, canonical
-from generate_registry import generate, version_key
+from native_registry_bridge import build, publish, digest, canonical, generate
+
 KUJO=os.environ.get('KUJO_BIN','kujo')
 
 class RegistryTests(unittest.TestCase):
@@ -129,7 +129,7 @@ class RegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'does not match release source'):self.build()
 
     def test_prerelease_precedence_is_numeric(self):
-        self.assertGreater(version_key('1.0.0-rc.10'), version_key('1.0.0-rc.9'))
-        self.assertGreater(version_key('1.0.0'),version_key('1.0.0-rc.10'))
+        result=self.kujo('from src.registry_site import site_compare\nassert_equal(site_compare("1.0.0-rc.10", "1.0.0-rc.9"), 1)\nassert_equal(site_compare("1.0.0", "1.0.0-rc.10"), 1)\n')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
 if __name__=='__main__':unittest.main()

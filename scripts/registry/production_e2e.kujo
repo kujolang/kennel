@@ -1,0 +1,33 @@
+from src.global_common import global_delete, global_runtime
+from src.registry_transport import registry_json
+from src.utils import ensure_dir
+mut root := env("KUJO_MODULE_PATH"); mut runtime := global_runtime()
+mut folder := create_temp_dir(path_absolute("/tmp"), "kennel-production-"); mut home := folder + "/home"; ensure_dir(home)
+mut settings := {"HOME": home, "KENNEL_HOME": home + "/.kennel", "KUJO_MODULE_PATH": root}
+func operation(runtime, root, settings, project, argv) {
+    mut started := current_timestamp()
+    mut result := spawn_process(concat([runtime, "run", root + "/kennel.kujo", "--interpreter", "--isolated-imports", "--"], concat(argv, ["--project-dir", project])), {"env": settings, "timeout_ms": 180000, "max_output_bytes": 8388608})
+    if result.success == false || result.stdout_truncated || result.stderr_truncated { throw(result.stdout + result.stderr) }
+    return current_timestamp() - started
+}
+mut results := {}
+try {
+    for package in ["changebucket", "kennel"] {
+        mut version := registry_json("https://kennel.kujolang.ai/api/v1/packages/" + package + ".json")["latest"]
+        mut project := folder + "/" + package; ensure_dir(project)
+        operation(runtime, root, settings, project, ["init", "--name", "registry-acceptance"])
+        results[package + "_uncached_ms"] = operation(runtime, root, settings, project, ["add", package])
+        mut lock := read_file(project + "/kennel.lock")
+        assert(contains(lock, "registry-statement-verified") != 0 && contains(lock, "https://kennel.kujolang.ai") != 0 && contains(lock, version) != 0, "exact verified registry lock")
+        global_delete(project + "/kennel_packages")
+        results[package + "_cached_ms"] = operation(runtime, root, settings, project, ["install"])
+        assert_equal(read_file(project + "/kennel.lock"), lock)
+        mut exact := folder + "/" + package + "-exact"; ensure_dir(exact)
+        operation(runtime, root, settings, exact, ["init", "--name", "registry-exact"])
+        results[package + "_exact_ms"] = operation(runtime, root, settings, exact, ["add", package + "@" + version])
+        mut clean := folder + "/" + package + "-clean"; ensure_dir(clean); global_delete(home + "/.kennel/cache")
+        operation(runtime, root, settings, clean, ["init", "--name", "registry-clean"])
+        results[package + "_clean_ms"] = operation(runtime, root, settings, clean, ["add", package])
+    }
+} except err { global_delete(folder); throw(err) }; global_delete(folder)
+print(to_json(results))

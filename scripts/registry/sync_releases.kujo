@@ -1,0 +1,49 @@
+from src.registry_package import package_build, package_publish, package_git
+from src.registry_protocol import registry_valid_version
+from src.registry_site import site_generate
+from src.global_common import global_capture, global_options, global_delete, global_contains
+from src.utils import dict_get_or
+func github_api(path) { return parse_json(global_capture(["gh", "api", path], {})) }
+mut options := global_options(args(), ["--root", "--policy", "--package", "--release-id"], [])
+mut root := options["--root"]; mut policy := json_file_read(options["--policy"], 8388608)
+mut only_package := dict_get_or(options, "--package", ""); mut only_release := dict_get_or(options, "--release-id", "")
+if only_package != "" && has_key(policy["packages"], only_package) == 0 { throw("Package is not enrolled") }
+if only_release != "" && (only_package == "" || regex_match(only_release, "^[0-9]+$") == false) { throw("An exact release ID requires an enrolled package and numeric ID") }
+mut changed := []
+for name in sort(keys(policy["packages"])) {
+    mut entry := policy["packages"][name]
+    if dict_get_or(entry, "enabled", false) == false || only_package != "" && name != only_package { continue }
+    mut repository := entry["repository"]; mut current := github_api("repos/" + repository)
+    if current["id"] != entry["repository_id"] || current["owner"]["login"] != "kujolang" || current["private"] { throw("Official repository identity/visibility changed") }
+    mut releases := []
+    if only_release != "" { releases = [github_api("repos/" + repository + "/releases/" + only_release)] } else {
+        mut page := 1
+        while page <= 1000 {
+            mut batch := github_api("repos/" + repository + "/releases?per_page=100&page=" + to_string(page))
+            releases = concat(releases, batch); if len(batch) < 100 { break }; page = page + 1
+        }
+        if page > 1000 { throw("Release pagination limit exceeded") }
+    }
+    # API order does not affect generated indexes; artifact directories are immutable.
+    for release in releases {
+        if release["draft"] || only_release != "" && to_string(release["id"]) != only_release { continue }
+        mut backfills := dict_get_or(entry, "backfill_release_ids", null)
+        if backfills != null && global_contains(backfills, release["id"]) == 0 && release["published_at"] < entry["enrolled_at"] { continue }
+        mut version := release["tag_name"]; if starts_with(version, "v") { version = substring(version, 1, len(version)) }
+        if registry_valid_version(version) == false { throw("Published release has invalid SemVer tag") }
+        if path_exists(root + "/packages/" + name + "/" + version) { continue }
+        mut checkout := create_temp_dir(path_absolute("/tmp"), "kennel-release-")
+        try {
+            package_git(checkout, ["init", "-q"])
+            package_git(checkout, ["fetch", "--depth=1", "https://github.com/" + repository + ".git", "refs/tags/" + release["tag_name"] + ":refs/tags/" + release["tag_name"]])
+            mut commit := trim(package_git(checkout, ["rev-parse", "refs/tags/" + release["tag_name"] + "^{commit}"]))
+            release["repository"] = repository; release["repository_id"] = current["id"]
+            mut workflow := {"run": "https://github.com/" + env_required("GITHUB_REPOSITORY") + "/actions/runs/" + env_required("GITHUB_RUN_ID"), "ref": env_required("KENNEL_WORKFLOW_REF"), "sha": env_required("KENNEL_WORKFLOW_SHA"), "published_at": now_utc()}
+            mut built := package_build(checkout, commit, release, policy, workflow, "https://kennel.kujolang.ai")
+            if built["metadata"]["package"] != name { throw("Package identity differs from enrolled name") }
+            if package_publish(root, built) { changed = push(changed, {"package": name, "version": version, "sha256": built["metadata"]["archive_sha256"]}) }
+        } except err { global_delete(checkout); throw(err) }; global_delete(checkout)
+    }
+}
+site_generate(env("KUJO_MODULE_PATH"), root)
+print(to_json({"published": changed}))

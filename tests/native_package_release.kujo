@@ -1,0 +1,33 @@
+from src.registry_package import package_build, package_publish, package_git
+from src.bootstrap import bootstrap_install_release
+from src.global_common import global_delete
+from src.utils import ensure_dir
+mut root := create_temp_dir(path_absolute("/tmp"), "kennel-release-test-")
+try {
+    mut repo := root + "/repo"; ensure_dir(repo)
+    package_git(repo, ["init", "-q"])
+    package_git(repo, ["config", "user.email", "fixture@example.invalid"])
+    package_git(repo, ["config", "user.name", "Fixture"])
+    write_file(repo + "/kennel.toml", "[package]\nname=\"kennel\"\nversion=\"2.0.0\"\n[kujo]\nsources=[\".\"]\n[dependencies]\n")
+    write_file(repo + "/main.kujo", "print(1)\n")
+    package_git(repo, ["add", "."]); package_git(repo, ["-c", "commit.gpgsign=false", "commit", "-qm", "fixture"])
+    mut commit := trim(package_git(repo, ["rev-parse", "HEAD"]))
+    package_git(repo, ["tag", "v2.0.0"])
+    mut release := {"repository": "kujolang/kennel", "repository_id": 1264528549, "id": 1, "draft": false, "prerelease": false, "tag_name": "v2.0.0", "published_at": "2026-09-08T00:00:00Z"}
+    mut policy := {"schema_version": 1, "packages": {"kennel": {"repository": "kujolang/kennel", "repository_id": 1264528549, "official": true, "enabled": true}}}
+    mut workflow := {"run": "https://github.com/kujolang/kennel-registry/actions/runs/1", "ref": "fixture", "sha": commit, "published_at": "2026-09-08T00:00:00Z"}
+    mut built := package_build(repo, commit, release, policy, workflow, "https://kennel.kujolang.ai")
+    assert_equal(built, package_build(repo, commit, release, policy, workflow, "https://kennel.kujolang.ai"))
+    assert_true(package_publish(root + "/registry", built))
+    assert_false(package_publish(root + "/registry", built))
+    mut target := root + "/install"; ensure_dir(target)
+    bootstrap_install_release(built["metadata"], built["artifacts"]["package.tar.gz"], built["artifacts"]["provenance.json"], target)
+    assert_equal(read_file(target + "/main.kujo"), "print(1)\n")
+    mut failed := false
+    try { bootstrap_install_release(built["metadata"], bytes([0]), built["artifacts"]["provenance.json"], root + "/bad") } except err { failed = true }
+    assert_true(failed); assert_false(path_exists(root + "/bad"))
+    mut changed := built; mut metadata := built["metadata"]; metadata["archive_sha256"] = repeat("0", 64); changed["metadata"] = metadata
+    failed = false; try { package_publish(root + "/registry", changed) } except err { failed = true }; assert_true(failed)
+    print("Native release packaging, deterministic artifacts, immutable publication, bootstrap validation and checksum failure: passed")
+} except err { global_delete(root); throw(err) }
+global_delete(root)
