@@ -1,0 +1,2 @@
+from src.global_tools import global_tools_main
+try { global_tools_main(env("KUJO_MODULE_PATH"), args()) } except err { print("kennel tool: " + to_string(err)); exit(1) }

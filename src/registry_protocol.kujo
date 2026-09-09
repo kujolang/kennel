@@ -80,7 +80,7 @@ export func registry_validate_version(doc, identity, version_url) {
 	for key in ["package", "version", "description", "license", "released_at", "source_commit", "source_tag", "archive_url", "provenance_url", "checksum_url", "repository", "minimum_kujo_version"] {
 		if type(dict_get_or(doc, key, null)) != "string" { throw("Missing or malformed release field: " + key) }
 	}
-	if has_key(doc, "scope") == false || type(dict_get_or(doc, "official", null)) != "bool" { throw("Missing ownership fields") }
+	if has_key(doc, "scope") == 0 || type(dict_get_or(doc, "official", null)) != "bool" { throw("Missing ownership fields") }
 	for key in ["repository_id", "release_id"] {
 		if type(dict_get_or(doc, key, null)) != "int" || doc[key] < 1 { throw("Invalid release identity: " + key) }
 	}

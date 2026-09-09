@@ -1,0 +1,53 @@
+from src.global_common import global_delete, global_capture
+from src.utils import ensure_dir
+
+root := env("KUJO_MODULE_PATH")
+runtime := env("KUJO_BIN")
+folder := create_temp_dir(path_absolute("/tmp"), "kennel-native-test-")
+user := folder + "/user's home"
+ensure_dir(user)
+base := user + "/.kennel"
+settings := {"HOME": user, "KENNEL_HOME": base, "KUJO_BIN": runtime, "KUJO_MODULE_PATH": root}
+func check(argv, expected, settings, cwd) {
+    result := spawn_process(argv, {"env": settings, "cwd": cwd, "timeout_ms": 180000, "max_output_bytes": 8388608})
+    if result.exitcode != expected || result.timed_out || result.stdout_truncated || result.stderr_truncated { throw(to_json(argv) + ": " + to_string(result.exitcode) + "\n" + result.stdout + result.stderr) }
+    return result.stdout
+}
+try {
+    setup := [runtime, "run", root + "/scripts/install.kujo", "--interpreter", "--isolated-imports", "--", "--source", root]
+    check(setup, 0, settings, folder)
+    before := read_file(user + "/.zshrc")
+    check(setup, 0, settings, folder)
+    assert_equal(read_file(user + "/.zshrc"), before)
+    launcher := base + "/bin/kennel"
+    assert_equal(trim(check([launcher, "--version"], 0, settings, folder)), "Kennel 1.1.0")
+    source := folder + "/global-demo"; ensure_dir(source)
+    manifest := "[package]\nname=\"global-demo\"\nversion=\"1.0.0\"\n[bin]\nglobal-demo=\"main.kujo\"\nglobal-exit=\"exit.kujo\"\n"
+    write_file(source + "/kennel.toml", manifest)
+    write_file(source + "/helper.kujo", "export message := \"installed\"\n")
+    write_file(source + "/main.kujo", "from helper import message\nassert_equal(message, \"installed\")\nprint(to_json({\"cwd\": os_getcwd(), \"args\": args()}))\n")
+    write_file(source + "/exit.kujo", "exit(7)\n")
+    write_file(folder + "/helper.kujo", "throw(\"CALLER MUST NOT LOAD\")\n")
+    check([launcher, "tool", "install", "file:" + source], 0, settings, folder)
+    payload := ["space argument", "", "--flag", "quote'\"", decode_charset(bytes([97,31,98]), "utf-8", 3)]
+    output := parse_json(check(concat([base + "/bin/global-demo"], payload), 0, settings, folder))
+    assert_equal(output["args"], payload); assert_equal(output["cwd"], folder)
+    assert_equal(parse_json(check([base + "/bin/global-demo"], 0, settings, folder))["args"], [])
+    check([base + "/bin/global-exit"], 7, settings, folder)
+    write_file_atomic(source + "/kennel.toml", replace(manifest, "1.0.0", "1.1.0"), true)
+    check([launcher, "tool", "update", "global-demo"], 0, settings, folder)
+    assert_equal(contains(check([launcher, "tool", "list"], 0, settings, folder), "global-demo 1.1.0"), 1)
+    before_state := read_file(base + "/tools.json")
+    write_file_atomic(source + "/kennel.toml", replace(manifest, "main.kujo", "../escape.kujo"), true)
+    check([launcher, "tool", "update", "global-demo"], 1, settings, folder)
+    assert_equal(read_file(base + "/tools.json"), before_state)
+    check([base + "/bin/global-demo", "still works"], 0, settings, folder)
+    other := folder + "/other"; ensure_dir(other + "/bin"); write_file(other + "/bin/kennel", "user command")
+    check(concat(setup, ["--home", other]), 1, settings, folder)
+    assert_equal(read_file(other + "/bin/kennel"), "user command")
+    check([launcher, "tool", "remove", "global-demo"], 0, settings, folder)
+    assert_false(path_exists(base + "/bin/global-demo"))
+    assert_equal(trim(check([launcher, "tool", "list"], 0, settings, folder)), "")
+    print("Native bootstrap, profiles, global lifecycle, exact argv/cwd, isolation, rollback and collision: passed")
+} except err { global_delete(folder); throw(err) }
+global_delete(folder)

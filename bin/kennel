@@ -8,10 +8,10 @@ if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-V" ]; then
 fi
 if [ "${1:-}" = "self" ] && [ "${2:-}" = "update" ]; then
     shift 2
-    exec "${PYTHON_BIN:-python3}" "$KENNEL_ROOT/scripts/install.py" --no-modify-path "$@"
+    exec "${KUJO_BIN:-kujo}" run "$KENNEL_ROOT/scripts/install.kujo" --interpreter --isolated-imports -- --no-modify-path "$@"
 fi
 if [ "${1:-}" = "tool" ]; then
     shift
-    exec "${PYTHON_BIN:-python3}" "$KENNEL_ROOT/scripts/tool_manager.py" "$@"
+    exec "${KUJO_BIN:-kujo}" run "$KENNEL_ROOT/scripts/tool_manager.kujo" --interpreter --isolated-imports -- "$@"
 fi
 exec "${KUJO_BIN:-kujo}" run "$KENNEL_ROOT/kennel.kujo" --interpreter --isolated-imports -- "$@"

@@ -1,0 +1,35 @@
+# Generate the standalone native bootstrap from the same reviewed client modules.
+from src.utils import ensure_dir
+params := args()
+if len(params) != 2 { throw("Usage: bundle_installer.kujo SOURCE_ROOT OUTPUT") }
+root := params[0]
+output := "# Generated Kennel native installer. Edit src/bootstrap.kujo and regenerate.\n"
+for module in ["src/utils.kujo", "src/semver.kujo", "src/registry_transport.kujo", "src/registry_protocol.kujo", "src/registry_archive.kujo", "src/global_common.kujo", "src/bootstrap.kujo"] {
+    output = output + "\n# " + module + "\n"
+    mut selected := []
+    if module == "src/utils.kujo" { selected = ["dict_get_or", "ensure_dir", "shell_quote", "is_valid_identifier", "validate_identifier"] }
+    if module == "src/registry_protocol.kujo" { selected = ["valid_digest", "registry_valid_version", "registry_identity", "registry_validate_version"] }
+    mut include_function := len(selected) == 0
+    for line in split(read_file(root + "/" + module), "\n") {
+        if len(selected) > 0 {
+            mut declaration := line
+            if starts_with(declaration, "export ") { declaration = substring(declaration, 7, len(declaration)) }
+            if starts_with(declaration, "func ") { include_function = contains(selected, split(substring(declaration, 5, len(declaration)), "(")[0]) }
+            if include_function == false { continue }
+            if starts_with(declaration, "func ") == false && line == "}" { include_function = false; output = output + line + "\n"; continue }
+        }
+        if starts_with(line, "from ") { continue }
+        if starts_with(line, "export ") && starts_with(line, "export func ") == false && contains(line, " := ") {
+            # Export aliases are already declared; exported constants are not.
+            body := substring(line, 7, len(line))
+            pair := split(body, " := ")
+            if len(pair) == 2 && pair[0] == pair[1] { continue }
+        }
+        if starts_with(line, "export ") { line = substring(line, 7, len(line)) }
+        output = output + line + "\n"
+    }
+}
+output = output + "\ntry { bootstrap_main(args()) } except err { print(\"Kennel installer: \" + to_string(err)); exit(1) }\n"
+ensure_dir(dirname(params[1]))
+write_file_atomic(params[1], output, true)
+print("Generated native installer: " + params[1])

@@ -10,13 +10,13 @@ Official first-party distribution is available through the versioned HTTPS proto
 
 ## Official Kennel Registry
 
-**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports`. The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
+**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports` and the native package primitives (`file_lock`, `file_unlock`, `exec_process`, `symlink_atomic`, `path_owned`). The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
 
 
-The **1.1.0 release candidate** adds global commands and a per-user installer. It is not yet an official release. Review on macOS/Linux with Kujo **1.3.1+**, Python **3.9+** and Git:
+The **1.1.0 release candidate** adds global commands and a per-user installer. It is not yet an official release. Review on macOS/Linux with a compatible Kujo source build and Git (Git is needed only for source review):
 
 ```bash
-python3 scripts/install.py --source .
+"${KUJO_BIN:-kujo}" run scripts/install.kujo --interpreter -- --source .
 . "$HOME/.kennel/env"
 kennel --version
 kennel tool install shipcheck

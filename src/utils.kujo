@@ -1,9 +1,9 @@
-func dict_get_or(obj, key, default_value) {
+func dict_get_or(obj, lookup_key, default_value) {
 	if type(obj) != "dict" {
 		return default_value
 	}
-	if has_key(obj, key) {
-		return obj[key]
+	if has_key(obj, lookup_key) {
+		return obj[lookup_key]
 	}
 	return default_value
 }
