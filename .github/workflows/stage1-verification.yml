@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kujo
-          ref: dd7d39d868d4b73c49c35a925339dec15951deaf # Reviewed installed-tool import isolation
+          ref: 3bf77fcc418ce3b5bf7a5fd0097ae602f3e7d6a8 # Reviewed native package primitives
           path: kujo-src
 
       - name: Setup Rust
@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kujo
-          ref: dd7d39d868d4b73c49c35a925339dec15951deaf # Reviewed installed-tool import isolation
+          ref: 3bf77fcc418ce3b5bf7a5fd0097ae602f3e7d6a8 # Reviewed native package primitives
           path: kujo-src
 
       - name: Setup Rust
@@ -196,7 +196,8 @@ jobs:
         if: matrix.profile == 'full'
         env:
           KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
+          KUJO_MODULE_PATH: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          python3 scripts/registry/production_e2e.py
-          python3 scripts/registry/global_tools_production_e2e.py
+          "$KUJO_BIN" run scripts/registry/production_e2e.kujo --interpreter --isolated-imports
+          "$KUJO_BIN" run scripts/registry/global_tools_production_e2e.kujo --interpreter --isolated-imports

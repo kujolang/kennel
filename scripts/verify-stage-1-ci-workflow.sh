@@ -48,8 +48,8 @@ required_patterns=(
 	"- security"
 	"- full"
 	"Verify anonymous production installs"
-	"python3 scripts/registry/production_e2e.py"
-	"python3 scripts/registry/global_tools_production_e2e.py"
+	"scripts/registry/production_e2e.kujo"
+	"scripts/registry/global_tools_production_e2e.kujo"
 	"set -euo pipefail"
 )
 
