@@ -1,0 +1,28 @@
+from src.registry_transport import registry_json
+from src.global_common import global_delete, global_runtime
+from src.utils import ensure_dir
+mut root := env("KUJO_MODULE_PATH"); mut runtime := global_runtime()
+mut packages := registry_json("https://kennel.kujolang.ai/api/v1/index.json")["packages"]
+mut passed := 0
+for package in packages {
+    mut temporary := create_temp_dir(path_absolute("/tmp"), "kennel-public-install-")
+    try {
+        mut home := temporary + "/home"; mut project := temporary + "/project"; mut bin := temporary + "/bin"
+        ensure_dir(home); ensure_dir(project); ensure_dir(bin)
+        write_file(bin + "/git", "#!/bin/sh\necho 'Unexpected Git access during registry install' >&2\nexit 97\n"); io_set_permissions(bin + "/git", 493)
+        mut settings := {"HOME": home, "KENNEL_HOME": home + "/.kennel", "PATH": bin + ":" + env("PATH"), "KUJO_MODULE_PATH": root}
+        mut times := []
+        for action in [["init", "--name", "public-install-acceptance"], ["add", package["name"]], ["install"]] {
+            if action[0] == "install" { global_delete(project + "/kennel_packages") }
+            mut start := current_timestamp()
+            mut result := spawn_process(concat([runtime, "run", root + "/kennel.kujo", "--interpreter", "--isolated-imports", "--"], concat(action, ["--project-dir", project])), {"env": settings, "timeout_ms": 180000, "max_output_bytes": 8388608})
+            if result.success == false || result.stdout_truncated || result.stderr_truncated { throw(result.stdout + result.stderr) }
+            times = push(times, current_timestamp() - start)
+        }
+        assert_true(path_is_file(project + "/kennel_packages/" + package["name"] + "/kennel.toml"))
+        mut lock := read_file(project + "/kennel.lock"); assert(contains(lock, package["latest"]) != 0 && contains(lock, "registry-statement-verified") != 0, "verified exact version lock")
+        passed = passed + 1; print(to_json({"package": package["name"], "version": package["latest"], "fresh_ms": times[1], "cached_ms": times[2], "git_disabled": true, "status": "passed"}))
+    } except err { print(to_json({"package": package["name"], "status": "failed", "error": to_string(err)})) }; global_delete(temporary)
+}
+print(to_json({"total": len(packages), "passed": passed}))
+if passed != len(packages) { exit(1) }

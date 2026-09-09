@@ -1,0 +1,34 @@
+from src.global_common import global_delete, global_runtime
+from src.utils import ensure_dir
+mut root := env("KUJO_MODULE_PATH"); mut runtime := global_runtime()
+mut home := create_temp_dir(path_absolute("/tmp"), "kennel-global-production-")
+mut base := home + "/custom-kennel"; mut settings := {"HOME": home, "KENNEL_HOME": base, "KUJO_BIN": runtime, "KUJO_MODULE_PATH": root}
+func checked(argv, settings, cwd, expected) {
+    mut result := spawn_process(argv, {"env": settings, "cwd": cwd, "timeout_ms": 180000, "max_output_bytes": 8388608})
+    if result.exitcode != expected || result.timed_out || result.stdout_truncated || result.stderr_truncated { throw(to_json(argv) + "\n" + result.stdout + result.stderr) }
+    return result.stdout
+}
+mut receipts := {}
+try {
+    ensure_dir(home + "/src"); write_file(home + "/src/cli.kujo", "throw(\"CALLER MODULE MUST NOT LOAD\")\n")
+    checked([runtime, "run", root + "/scripts/install.kujo", "--interpreter", "--isolated-imports", "--", "--source", root, "--no-modify-path"], settings, home, 0)
+    mut launcher := base + "/bin/kennel"
+    mut version := parse_toml(read_file(root + "/kennel.toml"))["package"]["version"]
+    assert_equal(trim(checked([launcher, "--version"], settings, home, 0)), "Kennel " + version)
+    for name in ["shipcheck", "spec", "changebucket", "runledger"] {
+        mut start := current_timestamp()
+        checked([launcher, "tool", "install", name, "--allow-shadow"], settings, home, 0)
+        assert(trim(checked([base + "/bin/" + name, "--help"], settings, home, 0)) != "", "tool help output")
+        mut state := json_file_read(base + "/tools.json", 8388608)
+        receipts[name] = {"version": state["packages"][name]["version"], "install_and_help_ms": current_timestamp() - start}
+    }
+    assert_true(path_is_dir(base + "/cache/sha256")); assert_false(path_exists(home + "/.kennel/cache"))
+    checked([launcher, "tool", "install", "shipcheck@1.0.0", "--allow-shadow"], settings, home, 0)
+    checked([launcher, "tool", "update", "shipcheck", "--allow-shadow"], settings, home, 0)
+    assert_equal(json_file_read(base + "/tools.json", 8388608)["packages"]["shipcheck"]["spec"], "shipcheck@1.0.0")
+    mut before := path_absolute(base + "/client")
+    checked([launcher, "self", "update", "--version", "1.0.1"], settings, home, 1)
+    assert_equal(path_absolute(base + "/client"), before)
+    checked([base + "/bin/shipcheck", "--help"], settings, home, 0)
+} except err { global_delete(home); throw(err) }; global_delete(home)
+print(to_json({"passed": true, "tools": receipts, "exact_pin_update": true, "failed_client_update_preserves_install": true}))

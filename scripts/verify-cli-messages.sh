@@ -39,7 +39,7 @@ Usage:
   kennel install-hosted <package> [--registry NAME] [--user NAME] [--store-path PATH] [--registry-dir PATH] [--allow-mutable-ref] [--project-dir PATH]
   kennel validate [--project-dir PATH]
 
-Global commands (bin/kennel launcher; Python 3.9+):
+Global commands (bin/kennel launcher; native Kujo):
   kennel tool install <package[@version]> [--command NAME] [--allow-shadow]
   kennel tool update [package]
   kennel tool list

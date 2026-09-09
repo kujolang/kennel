@@ -1,0 +1,8 @@
+from src.registry_package import package_build, package_publish
+from src.global_common import global_options
+from src.utils import dict_get_or
+mut options := global_options(args(), ["--repo", "--commit", "--release", "--policy", "--workflow", "--output", "--base"], [])
+for option_name in ["--repo", "--commit", "--release", "--policy", "--workflow", "--output"] { if has_key(options, option_name) == 0 { throw("Missing " + option_name) } }
+mut built := package_build(options["--repo"], options["--commit"], json_file_read(options["--release"], 1048576), json_file_read(options["--policy"], 8388608), json_file_read(options["--workflow"], 1048576), dict_get_or(options, "--base", "https://kennel.kujolang.ai"))
+mut changed := package_publish(options["--output"], built)
+print(to_json({"package": built["metadata"]["package"], "version": built["metadata"]["version"], "sha256": built["metadata"]["archive_sha256"], "changed": changed}))

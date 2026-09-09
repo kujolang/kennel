@@ -1,16 +1,16 @@
 # Global tools and the Kennel installer
 
-Status: 1.1.0 release candidate, not published. The latest historical release remains immutable. macOS and Linux are supported; Windows users need a Linux environment such as WSL. Kujo 1.3.1+, Python 3.9+ and curl are prerequisites. Python handles POSIX installation, command activation and bootstrap; the existing Kujo client remains responsible for tool resolution, checksums, provenance, extraction, caching and lockfiles. There is no second package resolver or package execution hook.
+Status: 1.1.0 release candidate, not published. The latest historical release remains immutable. macOS and Linux are supported; Windows users need a Linux environment such as WSL. A compatible Kujo runtime is required. Kennel’s installer, command activation, self-update and release publisher are Kujo-native. Python is not an installation or publishing dependency. The existing resolver, checksums, provenance, extraction, cache and lockfiles are reused. There is no second package resolver or package execution hook.
 
 ## Review before release
 
-**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports`. The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
+**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports` and the native package primitives (`file_lock`, `file_unlock`, `exec_process`, `symlink_atomic`, `path_owned`). The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
 
 
 Build the updated Kujo checkout with `cargo build --release --bin kujo`, then export `KUJO_BIN=/absolute/path/to/kujo/target/release/kujo`. From this Kennel checkout:
 
 ```sh
-python3 scripts/install.py --source .
+"${KUJO_BIN:-kujo}" run scripts/install.kujo --interpreter -- --source .
 . "$HOME/.kennel/env"
 kennel --version
 kennel tool install shipcheck
@@ -30,7 +30,7 @@ sh install.sh
 kennel --version
 ```
 
-Both installer files are inspectable. The shell entry point pins the Python installer digest. The Python bootstrap permits only official registry HTTPS URLs, rejects redirects by not following them, bounds downloads and expansion, verifies archive/provenance hashes and release/workflow identity, and rejects unsafe tar entries. This is HTTPS registry trust and provenance consistency, not an independent signature.
+Both installer files are inspectable. The shell entry point pins the native installer digest. The Kujo bootstrap permits only official registry HTTPS URLs, rejects redirects by not following them, bounds downloads and expansion, verifies archive/provenance hashes and release/workflow identity, and rejects unsafe tar entries. This is HTTPS registry trust and provenance consistency, not an independent signature.
 
 The installer creates `~/.kennel/bin/kennel` and atomically selects `~/.kennel/client`. It adds a marked, idempotent PATH block to `.profile`, `.bash_profile`, `.bashrc` and `.zshrc`, preserving other text. It cannot modify the parent terminal's environment; source `~/.kennel/env` or open a new terminal. Symlinked profiles require `--no-modify-path`. Fish users use `fish_add_path ~/.kennel/bin` and `--no-modify-path`.
 
@@ -81,7 +81,7 @@ To uninstall, remove tools with `kennel tool remove NAME`, remove the marked Ken
 
 - Review 1.1.0 changes and exact test results in `docs/registry/release-candidate.md`.
 - Keep the manifest version, intended tag and changelog aligned.
-- Ensure `bin/`, `scripts/bootstrap.json`, `scripts/install.py`, `scripts/tool_manager.py` and `scripts/tool_metadata.kujo` are included in the release package.
+- Ensure `bin/`, `scripts/bootstrap.json`, `scripts/install.kujo`, `scripts/tool_manager.kujo` and `scripts/tool_metadata.kujo` are included in the release package.
 - Publish an actual GitHub Release only after approval. A tag push alone does not publish a registry package.
 - Registry reconciliation packages the exact release and Pages deploys it. The onboarding page detects the installer marker in the latest stable archive and automatically removes the preview notice.
 - Verify a fresh public installer, `kennel --version`, a global tool invocation and project installation after the real release. No release is fabricated to satisfy this pre-release review.

@@ -1,0 +1,10 @@
+from src.registry_package import package_archive
+from src.registry_archive import extract_registry_archive
+from src.global_common import global_delete
+root := create_temp_dir(path_absolute("/tmp"), "kennel-archive-")
+blob := package_archive({"kennel.toml": {"data": bytes([97,98,99]), "mode": 420}, "src/main.kujo": {"data": bytes([120]), "mode": 493}})
+extract_registry_archive(blob, root + "/extract", 2)
+assert_equal(read_file(root + "/extract/kennel.toml"), "abc")
+assert_equal(io_file_metadata(root + "/extract/src/main.kujo")["mode"], 493)
+global_delete(root)
+print("Native deterministic USTAR round trip passed")

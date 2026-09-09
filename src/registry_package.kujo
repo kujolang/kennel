@@ -1,0 +1,209 @@
+from src.utils import dict_get_or, ensure_dir
+from src.global_common import global_capture, global_delete, global_name, global_contains
+from src.registry_archive import archive_safe_path
+from src.registry_protocol import registry_valid_version
+
+export func package_json(value) { return to_json(value) + "\n" }
+export func package_git(repo, argv) { return global_capture(concat(["git", "-C", repo], argv), {}) }
+func package_bytes(text) { return decode_base64(encode_base64(text)) }
+func package_safe_path(path) {
+    archive_safe_path(path)
+    if bytes_is_ascii(package_bytes(path)) == false { throw("Package paths must be portable ASCII") }
+    for ch in split(path, "") { if ch != "" && ch < " " { throw("Unsafe package path") } }
+}
+func package_zero(count) { return decode_base64(encode_base64(repeat(decode_charset(bytes([0]), "utf-8", 1), count))) }
+func package_octal(number, width) {
+    mut result := ""
+    while number > 0 { result = to_string(number % 8) + result; number = to_int(floor(number / 8)) }
+    return pad_start(result, width - 1, "0") + decode_charset(bytes([0]), "utf-8", 1)
+}
+func package_field(text, width) {
+    mut field_blob := package_bytes(text)
+    if len(field_blob) > width { throw("USTAR field exceeds limit") }
+    return concat(field_blob, package_zero(width - len(field_blob)))
+}
+export func package_archive(files) {
+    mut raw := bytes([])
+    mut names := sort(keys(files))
+    for path in names {
+        package_safe_path(path)
+        mut entry := files[path]; mut data := entry["data"]
+        mut short := path; mut prefix := ""
+        if len(path) > 100 {
+            mut parts := split(path, "/"); mut i := len(parts) - 1
+            while i > 0 { mut candidate := join(slice(parts, i, len(parts)), "/"); mut head := join(slice(parts, 0, i), "/"); if len(candidate) <= 100 && len(head) <= 155 { short = candidate; prefix = head; break }; i = i - 1 }
+            if prefix == "" { throw("Path does not fit USTAR") }
+        }
+        mut header := package_field(short, 100)
+        for field in [[entry["mode"], 8], [0, 8], [0, 8], [len(data), 12], [0, 12]] { header = concat(header, package_bytes(package_octal(field[0], field[1]))) }
+        header = concat(header, package_bytes("        0"))
+        header = concat(header, package_zero(100))
+        header = concat(header, concat(package_field("ustar", 6), package_bytes("00")))
+        header = concat(header, package_zero(80))
+        header = concat(header, package_field(prefix, 155))
+        header = concat(header, package_zero(12))
+        mut total := 0; mut offset := 0; while offset < len(header) { total = total + header[offset]; offset = offset + 1 }
+        mut sum := package_bytes(package_octal(total, 7) + " ")
+        header = concat(concat(slice(header, 0, 148), sum), slice(header, 156, 512))
+        raw = concat(raw, concat(header, data))
+        if len(data) % 512 != 0 { raw = concat(raw, package_zero(512 - len(data) % 512)) }
+        if len(raw) > 67106816 { throw("Package exceeds expanded limit") }
+    }
+    raw = concat(raw, package_zero(1024))
+    if len(raw) % 10240 != 0 { raw = concat(raw, package_zero(10240 - len(raw) % 10240)) }
+    if len(raw) > 67108864 { throw("Package exceeds expanded limit") }
+    mut blob := gzip_compress(raw)
+    if len(blob) > 8388608 { throw("Package exceeds compressed limit") }
+    return blob
+}
+export func package_matches(path, patterns) {
+    for pattern in patterns {
+        if type(pattern) != "string" { throw("Packaging controls must be string arrays") }
+        if pattern == "." || path == pattern || starts_with(path, pattern + "/") { return true }
+        mut expression := "^"
+        mut offset := 0
+        while offset < len(pattern) {
+            mut ch := substring(pattern, offset, offset + 1); offset = offset + 1
+            if ch == "[" {
+                mut end := offset
+                if end < len(pattern) && substring(pattern, end, end + 1) == "!" { end = end + 1 }
+                if end < len(pattern) && substring(pattern, end, end + 1) == "]" { end = end + 1 }
+                while end < len(pattern) && substring(pattern, end, end + 1) != "]" { end = end + 1 }
+                if end == len(pattern) { expression = expression + "\\["; continue }
+                mut members := substring(pattern, offset, end)
+                mut negated := starts_with(members, "!")
+                if negated { members = substring(members, 1, len(members)) }
+                expression = expression + "["; if negated { expression = expression + "^" }
+                for member in split(members, "") {
+                    if global_contains("\\[]^&~|", member) && member != "" { expression = expression + "\\" }
+                    expression = expression + member
+                }
+                expression = expression + "]"; offset = end + 1
+            } else if ch == "*" { expression = expression + ".*" } else if ch == "?" { expression = expression + "." } else if global_contains(".()+{}^$|\\]", ch) && ch != "" { expression = expression + "\\" + ch } else { expression = expression + ch }
+        }
+        if regex_match(path, expression + "$") { return true }
+    }
+    return false
+}
+func package_source_blob(repo, oid, scratch) {
+    mut path := scratch + "/blob"
+    if path_exists(path) { delete_file(path) }
+    mut result := spawn_process(["git", "-C", repo, "cat-file", "blob", oid], {"timeout_ms": 30000, "max_output_bytes": 8388608, "stream_stdout_path": path})
+    if result.success == false || result.stdout_truncated { throw("Cannot read bounded release blob") }
+    return io_read_bytes(path, 8388608)
+}
+export func package_build(repo, commit, release, policy, workflow, base) {
+    commit = trim(package_git(repo, ["rev-parse", "--verify", commit + "^{commit}"]))
+    mut tracked := split(trim(package_git(repo, ["ls-tree", "--name-only", commit])), "\n")
+    mut manifest := {}; mut synthetic := null; mut legacy := null; mut projection := null; mut name := ""
+    for candidate in keys(policy["packages"]) {
+        mut approved := policy["packages"][candidate]
+        if approved["repository"] != release["repository"] { continue }
+        mut selected := dict_get_or(dict_get_or(approved, "release_manifests", {}), commit, null)
+        if selected != null { if projection != null { throw("Ambiguous release manifest projection") }; projection = selected; name = candidate }
+    }
+    if projection != null {
+        mut source := dict_get_or(projection, "source_manifest", ""); mut source_text := ""
+        if source != "" && source != null { source_text = package_git(repo, ["show", commit + ":" + source]) }
+        if sha256(package_bytes(source_text)) != projection["source_manifest_sha256"] { throw("Release manifest projection source digest mismatch") }
+        if source_text != "" { manifest = parse_toml(source_text) }
+        mut pkg := dict_get_or(manifest, "package", dict_get_or(manifest, "project", {}))
+        mut version := release["tag_name"]; if starts_with(version, "v") { version = substring(version, 1, len(version)) }
+        if dict_get_or(pkg, "name", name) != dict_get_or(projection, "source_package", name) || dict_get_or(pkg, "version", version) != version { throw("Unexpected source package identity/version") }
+        pkg["name"] = name; pkg["version"] = version; pkg["description"] = dict_get_or(pkg, "description", projection["description"]); pkg["license"] = dict_get_or(pkg, "license", dict_get_or(projection, "license", "")); manifest["package"] = pkg
+        mut controls := dict_get_or(manifest, "kujo", {}); controls["entry"] = dict_get_or(controls, "entry", dict_get_or(projection, "entry", "")); controls["sources"] = dict_get_or(controls, "sources", ["."]); manifest["kujo"] = controls
+        mut dependencies := dict_get_or(manifest, "dependencies", {})
+        mut targets := dict_get_or(projection, "dependency_releases", {})
+        for dep in keys(targets) {
+            mut target := targets[dep]; mut declared := dict_get_or(dependencies, dep, null)
+            mut approved := dict_get_or(policy["packages"], target["package"], {})
+            if declared != target["original"] || target["commit"] != dict_get_or(dict_get_or(approved, "release_commits", {}), target["version"], "") { throw("Dependency projection does not match release source or approved release") }
+            if dict_get_or(declared, "commit", dict_get_or(declared, "ref", "")) != target["commit"] || declared["source"] != "github:" + approved["repository"] { throw("Dependency projection changes pinned source") }
+            dependencies[dep] = {"source": "registry:" + base + "/api/v1/packages/" + target["package"] + "/" + target["version"] + ".json"}
+        }
+        manifest["dependencies"] = dependencies; synthetic = package_bytes(to_toml(manifest))
+    } else if global_contains(tracked, "kennel.toml") { manifest = parse_toml(package_git(repo, ["show", commit + ":kennel.toml"]))
+    } else {
+        for candidate in keys(policy["packages"]) {
+            mut approved := policy["packages"][candidate]
+            if approved["repository"] != release["repository"] { continue }
+            mut selected := dict_get_or(dict_get_or(approved, "legacy_releases", {}), commit, null)
+            if selected != null { if legacy != null { throw("Ambiguous legacy policy") }; legacy = selected; name = candidate }
+        }
+        if legacy == null { throw("Release has no kennel.toml or commit-pinned legacy policy") }
+        mut original := parse_toml(package_git(repo, ["show", commit + ":" + legacy["source_manifest"]]))
+        if original["package"]["name"] != legacy["source_package"] || len(keys(dict_get_or(original, "dependencies", {}))) != 0 { throw("Unexpected legacy package identity/dependencies") }
+        manifest = {"package": {"name": name, "version": original["package"]["version"], "description": legacy["description"], "license": ""}, "kujo": {"entry": legacy["entry"], "sources": ["."]}, "dependencies": {}}
+        synthetic = package_bytes(to_toml(manifest))
+    }
+    mut pkg := manifest["package"]; name = pkg["name"]; mut version := pkg["version"]
+    if global_name(name) == false || registry_valid_version(version) == false { throw("Invalid package identity/SemVer") }
+    mut entry := dict_get_or(policy["packages"], name, {}); mut repository := release["repository"]
+    if dict_get_or(entry, "enabled", false) != true || dict_get_or(entry, "official", false) != true || dict_get_or(entry, "repository", "") != repository || dict_get_or(entry, "repository_id", 0) != release["repository_id"] || starts_with(repository, "kujolang/") == false { throw("Release repository is not authorized for this package") }
+    mut tag := release["tag_name"]; mut tagged_version := tag; if starts_with(tag, "v") { tagged_version = substring(tag, 1, len(tag)) }
+    mut prerelease := index_of(version, "-") >= 0
+    if dict_get_or(release, "draft", true) != false || tagged_version != version || prerelease != release["prerelease"] || type(release["id"]) != "int" || release["published_at"] == "" { throw("Actual published release tag/channel must match package") }
+    if trim(package_git(repo, ["rev-parse", "--verify", "refs/tags/" + tag + "^{commit}"])) != commit { throw("Release tag differs from exact source commit") }
+    mut controls := dict_get_or(manifest, "kujo", {})
+    mut include := concat(concat(dict_get_or(controls, "sources", ["."]), dict_get_or(controls, "includes", [])), ["kennel.toml", "LICENSE"])
+    mut exclude := dict_get_or(controls, "excludes", [])
+    mut files := {}; mut seen := {}; mut total := 0
+    mut scratch := create_temp_dir(path_absolute("/tmp"), "kennel-package-")
+    try {
+        for record in split(package_git(repo, ["ls-tree", "-rz", "--full-tree", commit]), decode_charset(bytes([0]), "utf-8", 1)) {
+            if record == "" { continue }
+            mut pair := split(record, "\t"); if len(pair) != 2 { throw("Unsafe Git path") }
+            mut header := split(pair[0], " "); mut path := pair[1]; mut deny := false
+            for part in split(path, "/") {
+                if global_contains([".git", ".env", ".kennel_tmp", ".kennel", "kennel_packages", "node_modules", "target", "dist", "build", "__pycache__", ".DS_Store", ".idea", ".vscode", ".cache", "artifacts"], part) || starts_with(part, ".env.") { deny = true }
+                for suffix in [".pem", ".key", ".p12", ".pyc", ".swp", "~"] { if ends_with(part, suffix) { deny = true } }
+            }
+            if deny || package_matches(path, include) == false || package_matches(path, exclude) { continue }
+            package_safe_path(path)
+            if has_key(seen, to_lower(path)) || header[1] != "blob" || global_contains(["100644", "100755"], header[0]) == 0 { throw("Unsupported link/submodule or colliding file") }
+            seen[to_lower(path)] = true
+            if path == "kennel.toml" && synthetic != null { continue }
+            mut data := package_source_blob(repo, header[2], scratch); total = total + len(data)
+            if total > 56868864 || len(keys(files)) >= 10000 { throw("Package exceeds expanded size/file limit") }
+            mut mode := 420; if header[0] == "100755" { mode = 493 }; files[path] = {"data": data, "mode": mode}
+        }
+    } except err { global_delete(scratch); throw(err) }
+    global_delete(scratch)
+    if synthetic != null { files["kennel.toml"] = {"data": synthetic, "mode": 420} }
+    if has_key(files, "kennel.toml") == 0 { throw("Package must include kennel.toml") }
+    mut commands := dict_get_or(manifest, "bin", {})
+    if type(commands) != "dict" { throw("[bin] must map commands to entries") }
+    for command in keys(commands) {
+        mut path := commands[command]
+        if global_name(command) == false || type(path) != "string" { throw("Invalid executable command declaration") }
+        package_safe_path(path)
+        if has_key(files, path) == 0 { throw("Executable entry not included: " + path) }
+        if ends_with(path, ".kujo") == false {
+            mut file := files[path]; mut line := trim(split(decode_charset(slice(file["data"], 0, min(256, len(file["data"]))), "utf-8", 256), "\n")[0])
+            if file["mode"] != 493 || global_contains(["#!/bin/sh", "#!/usr/bin/env sh", "#!/bin/bash", "#!/usr/bin/env bash", "#!/usr/bin/env python3", "#!/usr/bin/python3"], line) == 0 { throw("Unsupported executable entry") }
+        }
+    }
+    mut archive := package_archive(files); mut digest := sha256(archive); mut prefix := base + "/packages/" + name + "/" + version
+    mut provenance := {"schema_version": 1, "package": name, "version": version, "source_commit": commit, "source_tag": tag, "repository": repository, "repository_id": release["repository_id"], "release_id": release["id"], "released_at": release["published_at"], "published_at": workflow["published_at"], "workflow_run": workflow["run"], "workflow_ref": workflow["ref"], "workflow_sha": workflow["sha"], "archive_sha256": digest, "builder": "kennel-kujo-ustar-gzip-v1"}
+    if legacy != null { provenance["legacy_packaging"] = {"source_manifest": legacy["source_manifest"], "source_package": legacy["source_package"], "generated_file": "kennel.toml", "generated_file_sha256": sha256(synthetic)} }
+    if projection != null { provenance["manifest_projection"] = {"source_manifest": dict_get_or(projection, "source_manifest", null), "source_manifest_sha256": projection["source_manifest_sha256"], "generated_file": "kennel.toml", "generated_file_sha256": sha256(synthetic), "dependency_releases": dict_get_or(projection, "dependency_releases", {})} }
+    mut provenance_bytes := package_bytes(package_json(provenance))
+    mut metadata := {"schema_version": 1, "package": name, "version": version, "scope": null, "owner": {"type": "organization", "id": "kujolang"}, "official": true, "description": dict_get_or(pkg, "description", ""), "license": dict_get_or(pkg, "license", ""), "released_at": release["published_at"], "source_commit": commit, "source_tag": tag, "archive_url": prefix + "/package.tar.gz", "archive_sha256": digest, "archive_size": len(archive), "file_count": len(keys(files)), "provenance_url": prefix + "/provenance.json", "provenance_sha256": sha256(provenance_bytes), "checksum_url": prefix + "/checksums.txt", "dependencies": dict_get_or(manifest, "dependencies", {}), "minimum_kujo_version": dict_get_or(controls, "minimum_version", ""), "repository": repository, "repository_id": release["repository_id"], "release_id": release["id"]}
+    return {"metadata": metadata, "artifacts": {"package.tar.gz": archive, "manifest.json": package_bytes(package_json(metadata)), "provenance.json": provenance_bytes, "checksums.txt": package_bytes(digest + "  package.tar.gz\n" + sha256(provenance_bytes) + "  provenance.json\n")}}
+}
+export func package_publish(root, built) {
+    mut metadata := built["metadata"]; mut artifacts := built["artifacts"]; mut target := root + "/packages/" + metadata["package"] + "/" + metadata["version"]
+    if path_exists(target) {
+        mut old := json_file_read(target + "/manifest.json", 1048576)
+        for key in ["archive_sha256", "source_commit", "release_id", "repository_id"] { if old[key] != metadata[key] { throw("Immutable package version mutation rejected") } }
+        if sha256_file(target + "/package.tar.gz") != metadata["archive_sha256"] { throw("Immutable artifact corruption") }
+        for name in keys(artifacts) { if path_is_file(target + "/" + name) == false { throw("Incomplete existing publication; explicit recovery required") } }
+        return false
+    }
+    ensure_dir(dirname(target))
+    mut stage := create_temp_dir(dirname(target), ".publish-")
+    try { for name in keys(artifacts) { io_write_bytes(stage + "/" + name, artifacts[name]) }; publish_directory_noreplace(stage, target) } except err { global_delete(stage); throw(err) }
+    mut machine := root + "/api/v1/packages/" + metadata["package"] + "/" + metadata["version"] + ".json"
+    ensure_dir(dirname(machine)); write_file_atomic(machine, artifacts["manifest.json"], false)
+    return true
+}

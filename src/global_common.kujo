@@ -1,0 +1,94 @@
+from src.utils import dict_get_or, shell_quote, ensure_dir
+
+export func global_absolute(path) {
+    if starts_with(path, "/") == false { path = os_getcwd() + "/" + path }
+    mut parts := []
+    for part in split(path, "/") {
+        if part == "" || part == "." { continue }
+        if part == ".." { if len(parts) > 0 { parts = slice(parts, 0, len(parts) - 1) } } else { parts = push(parts, part) }
+    }
+    return "/" + join(parts, "/")
+}
+export func global_link(path) {
+    try { return path_is_symlink(path) } except err {
+        if global_contains(to_string(err), "No such file") { return false }
+        throw(err)
+    }
+}
+export func global_present(path) { return path_exists(path) || global_link(path) }
+export func global_no_links(path) {
+    mut current := global_absolute(path)
+    while current != "/" && current != "." {
+        if global_link(current) { throw("Path must not traverse symbolic links: " + current) }
+        mut next := dirname(current)
+        if next == current { break }
+        current = next
+    }
+}
+export func global_directory(path) {
+    global_no_links(path)
+    if path_exists(path) == false { ensure_dir(path); io_set_permissions(path, 448) }
+    mut info := io_file_metadata(path)
+    if info["is_dir"] == false || path_owned(path) == false || bit_and(info["mode"], 18) != 0 {
+        throw("Installation directories must be user-owned and not group/world writable: " + path)
+    }
+    return path
+}
+export func global_home(raw) {
+    if raw == "" { raw = env_or("KENNEL_HOME", env_required("HOME") + "/.kennel") }
+    if starts_with(raw, "~/") { raw = env("HOME") + substring(raw, 1, len(raw)) }
+    return global_directory(global_absolute(raw))
+}
+export func global_delete(path) {
+    if global_link(path) || path_is_file(path) { delete_file(path); return }
+    if path_is_dir(path) { for item in list_dir(path) { global_delete(path + "/" + item) }; os_rmdir(path) }
+}
+export func global_capture(argv, extra) {
+    mut result := spawn_process(argv, {"timeout_ms": 180000, "max_output_bytes": 8388608, "env": extra})
+    if result.success == false || result.stdout_truncated || result.stderr_truncated { throw("Command failed: " + join(argv, " ") + "\n" + result.stdout + result.stderr) }
+    return result.stdout
+}
+export func global_which(name) {
+    if index_of(name, "/") >= 0 { if path_is_file(name) { return path_absolute(name) }; return "" }
+    for dir in split(env("PATH"), ":") {
+        mut path := global_absolute(dir + "/" + name)
+        if path_is_file(path) && bit_and(io_file_metadata(path)["mode"], 73) != 0 { return path }
+    }
+    return ""
+}
+export func global_runtime() {
+    mut found := global_which(env_or("KUJO_BIN", "kujo"))
+    if found == "" { throw("Install a compatible Kujo runtime first") }
+    return found
+}
+export func global_name(name) {
+    if type(name) != "string" || len(name) == 0 || len(name) > 64 { return false }
+    if name[0] < "a" || name[0] > "z" { return false }
+    for ch in split(name, "") { if index_of("abcdefghijklmnopqrstuvwxyz0123456789_-", ch) < 0 { return false } }
+    return true
+}
+export func global_owned(path, expected) { return path_is_file(path) && global_link(path) == false && read_file(path) == expected }
+export func global_options(argv, value_flags, boolean_flags) {
+    mut result := {"positional": []}
+    mut i := 0
+    while i < len(argv) {
+        mut arg := argv[i]
+        mut equals := index_of(arg, "=")
+        if starts_with(arg, "--") && equals > 2 {
+            mut flag := substring(arg, 0, equals)
+            if global_contains(value_flags, flag) == 0 { throw("Unknown option: " + flag) }
+            result[flag] = substring(arg, equals + 1, len(arg)); i = i + 1; continue
+        }
+        if global_contains(value_flags, arg) {
+            i = i + 1
+            if i >= len(argv) { throw("Missing value for " + arg) }
+            result[arg] = argv[i]
+        } else if global_contains(boolean_flags, arg) { result[arg] = true
+        } else if starts_with(arg, "--") { throw("Unknown option: " + arg)
+        } else { result["positional"] = push(result["positional"], arg) }
+        i = i + 1
+    }
+    return result
+}
+
+export func global_contains(collection, value) { if contains(collection, value) { return 1 }; return 0 }

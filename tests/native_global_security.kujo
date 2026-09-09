@@ -1,0 +1,42 @@
+from src.global_tools import tool_entry, tool_commands, tool_activate, tool_state, tool_shim
+from src.global_common import global_delete, global_directory
+from src.bootstrap import bootstrap_profiles
+from src.utils import ensure_dir
+mut folder := create_temp_dir(path_absolute("/tmp"), "kennel-security-")
+func rejects(callback) { mut failed := false; try { callback() } except err { failed = true }; assert_true(failed) }
+try {
+    write_file(folder + "/main.kujo", "print(1)")
+    assert_equal(tool_commands(folder, {"package": {"name": "demo"}, "kujo": {"entry": "main.kujo"}}, ""), {"demo": "main.kujo"})
+    assert_equal(tool_commands(folder, {"bin": {"one": "main.kujo", "two": "main.kujo"}}, ""), {"one": "main.kujo", "two": "main.kujo"})
+    rejects(func () { tool_commands(folder, {"package": {"name": "library"}}, "") })
+    symlink_atomic("main.kujo", folder + "/linked.kujo")
+    for entry in ["../main.kujo", "/main.kujo", "linked.kujo", "missing.kujo", "x.sh"] { rejects(func () { tool_entry(folder, entry) }) }
+    for command in ["kennel", "kujo", "sh", "bad/name", "--bad"] {
+        mut declared := {}; declared[command] = "main.kujo"
+        rejects(func () { tool_commands(folder, {"bin": declared}, "") })
+    }
+    write_file(folder + "/script", "#!/usr/bin/env bash\nprintf '%s' \"$1\"\n"); io_set_permissions(folder + "/script", 493)
+    assert_equal(tool_entry(folder, "script"), ["/bin/bash", folder + "/script"])
+    io_set_permissions(folder + "/script", 420); rejects(func () { tool_entry(folder, "script") })
+    io_set_permissions(folder + "/script", 493); write_file_atomic(folder + "/script", "#!/usr/bin/env arbitrary-program\n", true); rejects(func () { tool_entry(folder, "script") })
+    mut base := folder + "/state"; ensure_dir(base + "/bin"); write_file(base + "/bin/demo", "user command")
+    rejects(func () { tool_activate(base, {"schema_version": 1, "packages": {}}, "demo", {"commands": {"demo": "main.kujo"}}, true) })
+    assert_equal(read_file(base + "/bin/demo"), "user command"); assert(path_exists(base + "/tools.json") == false, "collision state absent")
+    delete_file(base + "/bin/demo")
+    rejects(func () { tool_activate(base, {"schema_version": 1, "packages": {"first": {"commands": {"demo": "main.kujo"}}}}, "second", {"commands": {"demo": "main.kujo"}}, true) })
+    ensure_dir(base + "/tools.json")
+    rejects(func () { tool_activate(base, {"schema_version": 1, "packages": {}}, "demo", {"commands": {"demo": "main.kujo"}}, true) })
+    assert(path_exists(base + "/bin/demo") == false, "rollback shim absent"); os_rmdir(base + "/tools.json")
+    tool_activate(base, {"schema_version": 1, "packages": {}}, "demo", {"version": "1", "commands": {"demo": "main.kujo"}}, true)
+    tool_activate(base, tool_state(base), "demo", {"version": "2", "commands": {"new-demo": "main.kujo"}}, true)
+    assert_equal(tool_state(base)["packages"]["demo"]["version"], "2"); assert(path_exists(base + "/bin/demo") == false, "removed shim absent"); assert_true(path_exists(base + "/bin/new-demo"))
+    mut user := folder + "/home"; ensure_dir(user); write_file(user + "/.zshrc", "export USER_SETTING=keep\n")
+    bootstrap_profiles(base, user); mut profile := read_file(user + "/.zshrc"); bootstrap_profiles(base, user); assert_equal(read_file(user + "/.zshrc"), profile); assert_equal(contains(profile, "USER_SETTING=keep"), 1)
+    symlink_atomic("missing", user + "/.profile-link")
+    delete_file(user + "/.profile"); symlink_atomic("missing", user + "/.profile")
+    rejects(func () { bootstrap_profiles(base, user) })
+    mut unsafe := folder + "/unsafe"; ensure_dir(unsafe); io_set_permissions(unsafe, 511)
+    rejects(func () { global_directory(unsafe) })
+    print("Native entry, library, shebang, traversal, symlink, reserved command, ownership, write-failure rollback, activation, profile and permission regressions: passed")
+} except err { global_delete(folder); throw(err) }
+global_delete(folder)

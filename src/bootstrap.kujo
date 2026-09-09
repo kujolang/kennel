@@ -1,0 +1,121 @@
+from src.global_common import global_link, global_present, global_no_links, global_directory, global_home, global_delete, global_capture, global_runtime, global_owned, global_options, global_contains
+from src.utils import dict_get_or, shell_quote, ensure_dir
+from src.registry_transport import registry_json, registry_blob
+from src.registry_protocol import registry_validate_version, registry_valid_version
+from src.registry_archive import extract_registry_archive
+
+func bootstrap_download(version, target) {
+    mut origin := "https://kennel.kujolang.ai"
+    if version == "" { version = dict_get_or(registry_json(origin + "/api/v1/packages/kennel.json"), "latest", "") }
+    if type(version) != "string" || registry_valid_version(version) == false { throw("Invalid or unavailable Kennel release version") }
+    mut url := origin + "/api/v1/packages/kennel/" + version + ".json"
+    mut doc := registry_validate_version(registry_json(url), "kennel", url)
+    mut archive := registry_blob(doc["archive_url"], doc["archive_sha256"], 8388608)
+    mut provenance := registry_blob(doc["provenance_url"], doc["provenance_sha256"], 1048576)
+    return bootstrap_install_release(doc, archive, provenance, target)
+}
+export func bootstrap_install_release(doc, archive, provenance_bytes, target) {
+    mut origin := "https://kennel.kujolang.ai"
+    mut version := dict_get_or(doc, "version", "")
+    registry_validate_version(doc, "kennel", origin + "/api/v1/packages/kennel/" + version + ".json")
+    if doc["repository"] != "kujolang/kennel" || doc["repository_id"] != 1264528549 || doc["scope"] != null || doc["official"] != true { throw("Invalid official Kennel release identity") }
+    if doc["source_tag"] != version && doc["source_tag"] != "v" + version { throw("Malformed official release tag") }
+    if len(archive) != doc["archive_size"] { throw("Kennel archive size mismatch") }
+    if sha256(archive) != doc["archive_sha256"] || sha256(provenance_bytes) != doc["provenance_sha256"] { throw("Kennel release checksum mismatch") }
+    mut provenance := parse_json(decode_charset(provenance_bytes, "utf-8", 1048576))
+    if type(provenance) != "dict" || dict_get_or(provenance, "schema_version", 0) != 1 || starts_with(dict_get_or(provenance, "workflow_run", ""), "https://github.com/kujolang/kennel-registry/actions/runs/") == false { throw("Invalid official publishing workflow provenance") }
+    mut workflow_sha := dict_get_or(provenance, "workflow_sha", "")
+    if len(workflow_sha) != 40 { throw("Invalid publishing workflow SHA") }
+    for ch in split(workflow_sha, "") { if index_of("0123456789abcdef", ch) < 0 { throw("Invalid publishing workflow SHA") } }
+    for key in ["package", "version", "source_commit", "source_tag", "repository", "repository_id", "release_id", "archive_sha256"] {
+        if dict_get_or(provenance, key, null) != doc[key] { throw("Kennel provenance identity mismatch: " + key) }
+    }
+    os_rmdir(target)
+    extract_registry_archive(archive, target, doc["file_count"])
+    return {"version": version, "archive_sha256": doc["archive_sha256"], "registry": origin}
+}
+func bootstrap_source(source, target) {
+    for relative in ["kennel.kujo", "kennel.toml", "bin/kennel", "scripts/tool_manager.kujo", "scripts/bootstrap.json"] {
+        if path_is_file(source + "/" + relative) == false { throw("Not an installable Kennel checkout: " + relative) }
+    }
+    mut names := split(global_capture(["git", "-C", source, "ls-files", "-z"], {}), decode_charset(bytes([0]), "utf-8", 1))
+    for name in names {
+        if name == "" { continue }
+        mut excluded := false
+        for part in split(name, "/") { if global_contains([".git", ".kennel_tmp", "kennel_packages", "node_modules"], part) { excluded = true } }
+        if excluded { continue }
+        mut path := source + "/" + name
+        global_no_links(path)
+        if path_is_file(path) {
+            mut dest := target + "/" + name; ensure_dir(dirname(dest)); copy_file(path, dest)
+            mut mode := 420
+            if bit_and(io_file_metadata(path)["mode"], 73) != 0 { mode = 493 }
+            io_set_permissions(dest, mode)
+        }
+    }
+    return {"source": source, "review_build": true}
+}
+export func bootstrap_profiles(base, user_home) {
+    mut environment := base + "/env"
+    global_no_links(environment)
+    mut text := "# Kennel PATH\ncase \":$" + "{PATH:-}:\" in *" + shell_quote(":" + base + "/bin:") + "*) ;; *) export PATH=" + shell_quote(base + "/bin") + ":\"$" + "{PATH:-}\" ;; esac\n"
+    write_file_atomic(environment, text, true)
+    mut block := "\n# >>> Kennel PATH >>>\n. " + shell_quote(environment) + "\n# <<< Kennel PATH <<<\n"
+    for name in [".profile", ".bash_profile", ".bashrc", ".zshrc"] {
+        mut path := user_home + "/" + name
+        if global_link(path) { throw("Refusing to change symlinked shell profile; use --no-modify-path: " + path) }
+        mut old := ""; if path_exists(path) { old = read_file(path) }
+        mut updated := old + block
+        mut start := index_of(old, "# >>> Kennel PATH >>>")
+        if start >= 0 {
+            mut finish := index_of(old, "# <<< Kennel PATH <<<")
+            if finish < start { throw("Malformed Kennel PATH profile block") }
+            mut end := finish + len("# <<< Kennel PATH <<<")
+            if start > 0 && substring(old, start - 1, start) == "\n" { start = start - 1 }
+            if end < len(old) && substring(old, end, end + 1) == "\n" { end = end + 1 }
+            updated = substring(old, 0, start) + block + substring(old, end, len(old))
+        }
+        if updated != old { write_file_atomic(path, updated, true) }
+    }
+}
+export func bootstrap_main(argv) {
+    if global_contains(argv, "--help") || global_contains(argv, "-h") { print("Install Kennel for macOS/Linux. Requires a Kujo runtime with native package primitives.\nUsage: install.kujo [--source CHECKOUT | --version VERSION] [--home PATH] [--no-modify-path]"); return }
+    mut parsed := global_options(argv, ["--source", "--version", "--home"], ["--no-modify-path"])
+    mut source := dict_get_or(parsed, "--source", ""); mut version := dict_get_or(parsed, "--version", "")
+    if len(parsed["positional"]) != 0 || source != "" && version != "" { throw("Use either --source or --version") }
+    mut runtime := global_runtime()
+    mut base := global_home(dict_get_or(parsed, "--home", ""))
+    env_set("KENNEL_HOME", base)
+    mut token := file_lock(base + "/.tools.lock", 180000)
+    mut stage := ""
+    try {
+        mut clients := global_directory(base + "/clients"); mut bindir := global_directory(base + "/bin")
+        mut launcher := bindir + "/kennel"
+        mut expected := "#!/bin/sh\n# Kennel managed client\nexport KENNEL_HOME=" + shell_quote(base) + "\nexec " + shell_quote(base + "/client/bin/kennel") + " \"$@\"\n"
+        if global_present(launcher) && global_owned(launcher, expected) == false { throw("Refusing to overwrite an existing kennel command: " + launcher) }
+        mut current := base + "/client"
+        if global_present(current) && global_link(current) == false { throw("Existing client directory is not managed by this installer") }
+        mut modify := dict_get_or(parsed, "--no-modify-path", false) == false
+        if modify {
+            for name in [".profile", ".bash_profile", ".bashrc", ".zshrc"] { if global_link(env("HOME") + "/" + name) { throw("Shell profile is a symlink; use --no-modify-path") } }
+        }
+        stage = create_temp_dir(clients, "client-")
+        mut receipt := {}
+        if source != "" { receipt = bootstrap_source(path_absolute(source), stage) } else { receipt = bootstrap_download(version, stage) }
+        mut marker := stage + "/scripts/bootstrap.json"
+        if path_is_file(marker) == false || dict_get_or(parse_json(read_file(marker)), "installer_protocol", 0) != 2 { throw("This historical Kennel release predates the native installer; use --source for review until the compatible release is published") }
+        for relative in ["bin/kennel", "kennel.kujo", "scripts/tool_manager.kujo", "scripts/install.kujo"] { if path_is_file(stage + "/" + relative) == false { throw("Incomplete Kennel client: " + relative) } }
+        io_set_permissions(stage + "/bin/kennel", 493)
+        global_capture([runtime, "run", stage + "/kennel.kujo", "--interpreter", "--isolated-imports", "--", "help"], {"KUJO_MODULE_PATH": stage, "KUJO_ISOLATED_IMPORTS": "1"})
+        write_file(stage + "/install-receipt.json", to_json(receipt) + "\n")
+        if modify { bootstrap_profiles(base, env("HOME")) }
+        if global_present(launcher) == false { write_file(launcher, expected); io_set_permissions(launcher, 493) }
+        symlink_atomic("clients/" + basename(stage), current)
+        stage = ""
+    } except err { if stage != "" { global_delete(stage) }; file_unlock(token); throw(err) }
+    file_unlock(token)
+    print("Kennel installed in " + base)
+    print("For this terminal: export PATH=" + shell_quote(base + "/bin") + ":\"$PATH\"")
+    print("Next: kennel tool install shipcheck")
+    if source != "" { print("Review build installed; no official release was published.") }
+}

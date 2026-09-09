@@ -95,11 +95,11 @@ export func extract_registry_archive(blob, staging, expected_count) {
 		}
 		archive_safe_path(name)
 		if name == "kennel.toml" { manifest_found = true }
-		lower := to_lower(name)
-		if has_key(seen, lower) {
+		folded_name := to_lower(name)
+		if has_key(seen, folded_name) {
 			throw("Duplicate archive path")
 		}
-		seen[lower] := true
+		seen[folded_name] := true
 		mode := tar_octal(header, 100, 8)
 		if mode != 420 && mode != 493 {
 			throw("Unsafe archive permissions")

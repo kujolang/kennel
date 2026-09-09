@@ -2,7 +2,9 @@
 set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
-python3 -m unittest discover -s tests -p 'test_global_tools.py'
-python3 tests/global_tools_e2e.py
-python3 tests/bootstrap_release_e2e.py
+export KUJO_MODULE_PATH="$ROOT_DIR"
+KUJO_BIN="${KUJO_BIN:-kujo}"
+for suite in native_global_security native_global_tools_e2e native_package_smoke native_package_release; do
+  "$KUJO_BIN" run "tests/$suite.kujo" --interpreter --isolated-imports
+done
 echo '[verify-global-tools] success'

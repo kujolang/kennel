@@ -1,0 +1,138 @@
+from src.utils import dict_get_or, ensure_dir
+from src.global_common import global_delete, global_capture, global_runtime, global_name, global_contains
+from src.semver import parse_semver_value, compare_semver
+from src.registry_protocol import registry_valid_version
+from src.registry_archive import extract_registry_archive
+from src.registry_package import package_json
+
+export func site_escape(value) { return replace(replace(replace(replace(replace(to_string(value), "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#x27;") }
+func site_page(source, title, content, route, description) {
+    mut template := read_file(source + "/scripts/registry/site/page.html")
+    mut fields := {"title": site_escape(title), "description": site_escape(description), "path": site_escape(route), "content": content}
+    mut output := ""; mut pieces := split(template, "{{"); output = pieces[0]
+    for piece in slice(pieces, 1, len(pieces)) {
+        mut end := index_of(piece, "}}")
+        if end < 0 { throw("Invalid page template") }
+        mut key := substring(piece, 0, end)
+        output = output + fields[key] + substring(piece, end + 2, len(piece))
+    }
+    return output
+}
+func site_copy(source, target) {
+    ensure_dir(target)
+    for name in list_dir(source) {
+        mut path := source + "/" + name
+        if path_is_symlink(path) { throw("Site assets must not be symlinks") }
+        if path_is_dir(path) { site_copy(path, target + "/" + name) } else { copy_file(path, target + "/" + name) }
+    }
+}
+func site_write(path, text) { ensure_dir(dirname(path)); write_file_atomic(path, text, true) }
+export func site_compare(left, right) {
+    mut lp := split(left, "-"); mut rp := split(right, "-")
+    mut core := compare_semver(parse_semver_value(lp[0]), parse_semver_value(rp[0]))
+    if core != 0 { return core }
+    if len(lp) == 1 && len(rp) > 1 { return 1 }; if len(lp) > 1 && len(rp) == 1 { return -1 }; if len(lp) == 1 { return 0 }
+    mut a := split(substring(left, len(lp[0]) + 1, len(left)), "."); mut b := split(substring(right, len(rp[0]) + 1, len(right)), ".")
+    mut i := 0
+    while i < min(len(a), len(b)) {
+        if a[i] != b[i] {
+            mut an := regex_match(a[i], "^[0-9]+$"); mut bn := regex_match(b[i], "^[0-9]+$")
+            if an && bn { if len(a[i]) != len(b[i]) { if len(a[i]) > len(b[i]) { return 1 }; return -1 } }
+            if an && bn == false { return -1 }; if bn && an == false { return 1 }
+            if a[i] > b[i] { return 1 }; return -1
+        }; i = i + 1
+    }
+    if len(a) > len(b) { return 1 }; if len(a) < len(b) { return -1 }; return 0
+}
+func site_versions(rows) {
+    mut sorted_rows := []
+    for row in rows {
+        mut next_rows := []; mut added := false
+        for old in sorted_rows { if added == false && site_compare(row["version"], old["version"]) > 0 { next_rows = push(next_rows, row); added = true }; next_rows = push(next_rows, old) }
+        if added == false { next_rows = push(next_rows, row) }; sorted_rows = next_rows
+    }; return sorted_rows
+}
+func site_render_package(source, root, metadata, versions, route) {
+    mut name := metadata["package"]; mut version := metadata["version"]; mut exact := route != name
+    mut links := []
+    for release in versions { links = push(links, "<a href=\"/" + name + "/" + release["version"] + "\">" + release["version"] + "</a>") }
+    mut command := "kennel add " + name; if exact { command = command + "@" + version }
+    mut license := metadata["license"]; if license == "" { license = "Not declared in this release" }
+    mut fields := [["Version", version], ["License", license], ["Released", metadata["released_at"]], ["Download", to_string(metadata["archive_size"]) + " bytes · " + to_string(metadata["file_count"]) + " files"], ["SHA-256", metadata["archive_sha256"]], ["Source commit", metadata["source_commit"]]]
+    mut info := ""; for field in fields { info = info + "<dt>" + site_escape(field[0]) + "</dt><dd>" + site_escape(field[1]) + "</dd>" }
+    mut trail := ""; if exact { trail = " / " + version }
+    mut dependencies := "No package dependencies."; if len(keys(metadata["dependencies"])) > 0 { dependencies = site_escape(to_json_pretty(metadata["dependencies"])) }
+    mut body := "<p class=\"eyebrow\"><a href=\"/\">Packages</a> / " + name + trail + "</p><h1>" + name + "</h1><span class=\"badge\">Official · kujolang</span><p class=\"intro\">" + site_escape(metadata["description"]) + "</p><code class=\"command\">" + command + "</code><div class=\"detail\"><section><h2>Release " + version + "</h2><p><a href=\"" + site_escape(metadata["archive_url"]) + "\">Download package.tar.gz</a> · <a href=\"/api/v1/packages/" + name + "/" + version + ".json\">Exact release JSON</a> · <a href=\"/" + name + ".md\">Markdown</a></p><h2>Versions</h2><p>" + join(links, " · ") + "</p><h2>Dependencies</h2><pre>" + dependencies + "</pre><h2>Provenance</h2><p>Release identity and archive digest are recorded in the <a href=\"" + site_escape(metadata["provenance_url"]) + "\">publishing statement</a>. The registry is the trust authority; this statement is not an independent signature.</p><p>Source project: <a href=\"https://github.com/" + site_escape(metadata["repository"]) + "\">" + site_escape(metadata["repository"]) + "</a> · release ID " + to_string(metadata["release_id"]) + "</p></section><aside><h2>Package details</h2><dl>" + info + "</dl><p><a href=\"" + site_escape(metadata["checksum_url"]) + "\">Checksum file</a></p></aside></div>"
+    mut title := name; if exact { title = title + " " + version }
+    site_write(root + "/" + route + "/index.html", site_page(source, title, body, route, metadata["description"]))
+}
+func site_onboarding(source, root) {
+    global_capture([global_runtime(), "run", source + "/scripts/bundle_installer.kujo", "--interpreter", "--isolated-imports", "--", source, root + "/install.kujo"], {"KUJO_MODULE_PATH": source})
+    mut checksum := sha256_file(root + "/install.kujo")
+    mut shell := read_file(source + "/scripts/registry/site/install.sh.template")
+    site_write(root + "/install.sh", replace(shell, "INSTALLER_SHA256", checksum))
+    if path_exists(root + "/install.py") { delete_file(root + "/install.py") }
+    mut ready := false
+    if path_exists(root + "/api/v1/packages/kennel.json") {
+        mut latest := json_file_read(root + "/api/v1/packages/kennel.json", 1048576)["latest"]
+        if latest != "" {
+            mut folder := root + "/packages/kennel/" + latest
+            mut metadata := json_file_read(folder + "/manifest.json", 1048576)
+            mut temp := create_temp_dir(path_absolute("/tmp"), "kennel-marker-")
+            try {
+                extract_registry_archive(io_read_bytes(folder + "/package.tar.gz", 8388608), temp + "/package", metadata["file_count"])
+                mut marker := temp + "/package/scripts/bootstrap.json"
+                if path_exists(marker) { ready = dict_get_or(json_file_read(marker, 1048576), "installer_protocol", 0) == 2 }
+            } except err { global_delete(temp); throw(err) }; global_delete(temp)
+        }
+    }
+    mut notice := ""; if ready == false { notice = "<p class=\"badge\">Release preview — the first native-installer Kennel release is pending.</p><p>Review with a compatible Kujo source build. Historical releases are rejected. No new release has been published.</p>" }
+    mut body := replace(read_file(source + "/scripts/registry/site/onboarding.html"), "{{notice}}", notice)
+    site_write(root + "/getting-started/index.html", site_page(source, "Getting started", body, "getting-started", "Install Kennel, manage global Kujo tools, and add project dependencies."))
+}
+export func site_generate(source, root) {
+    site_copy(source + "/scripts/registry/assets", root + "/assets")
+    mut summaries := []; mut catalog := {}
+    if path_exists(dirname(root) + "/catalog.json") { catalog = json_file_read(dirname(root) + "/catalog.json", 1048576)["packages"] }
+    if path_exists(root + "/packages") {
+        for name in sort(list_dir(root + "/packages")) {
+            if global_name(name) == false || path_is_symlink(root + "/packages/" + name) { throw("Invalid package directory") }
+            mut versions := []
+            for version in list_dir(root + "/packages/" + name) {
+                mut folder := root + "/packages/" + name + "/" + version
+                if starts_with(version, ".") { throw("Unfinished package staging directory") }
+                if path_is_symlink(folder) { throw("Invalid version directory") }
+                for file in ["manifest.json", "package.tar.gz", "provenance.json", "checksums.txt"] { if path_is_symlink(folder + "/" + file) || path_is_file(folder + "/" + file) == false { throw("Artifact must be a regular file") } }
+                if file_size(folder + "/package.tar.gz") > 8388608 { throw("Archive exceeds registry limit") }
+                mut manifest_path := folder + "/manifest.json"; mut metadata := json_file_read(manifest_path, 1048576)
+                if metadata["package"] != name || metadata["version"] != version || registry_valid_version(version) == false { throw("Package directory identity mismatch") }
+                if sha256_file(folder + "/package.tar.gz") != metadata["archive_sha256"] || sha256_file(folder + "/provenance.json") != metadata["provenance_sha256"] { throw("Corrupt immutable artifact") }
+                if read_file(folder + "/checksums.txt") != metadata["archive_sha256"] + "  package.tar.gz\n" + metadata["provenance_sha256"] + "  provenance.json\n" { throw("Checksum file differs from immutable manifest") }
+                if read_file(root + "/api/v1/packages/" + name + "/" + version + ".json") != read_file(manifest_path) { throw("Version metadata differs from immutable manifest") }
+                versions = push(versions, metadata)
+            }
+            versions = site_versions(versions); if len(versions) == 0 { continue }
+            mut stable := []; for metadata in versions { if index_of(metadata["version"], "-") < 0 { stable = push(stable, metadata) } }
+            mut latest := versions[0]; mut stable_version := ""; if len(stable) > 0 { latest = stable[0]; stable_version = latest["version"] }
+            mut description := dict_get_or(dict_get_or(catalog, name, {}), "description", latest["description"])
+            if type(description) != "string" || has_key(catalog, name) != 0 && trim(description) == "" { throw("Catalog description must be nonempty text") }
+            mut summary := {"schema_version": 1, "name": name, "scope": null, "owner": latest["owner"], "official": true, "description": description, "latest": stable_version, "metadata_path": "packages/" + name + ".json"}
+            mut rows := []; mut labels := []
+            for metadata in versions { rows = push(rows, {"version": metadata["version"], "metadata_url": "https://kennel.kujolang.ai/api/v1/packages/" + name + "/" + metadata["version"] + ".json", "archive_sha256": metadata["archive_sha256"], "yanked": false}); labels = push(labels, metadata["version"]); site_render_package(source, root, metadata, versions, name + "/" + metadata["version"]) }
+            mut document := summary; document["versions"] = rows
+            site_write(root + "/api/v1/packages/" + name + ".json", package_json(document)); summaries = push(summaries, summary)
+            latest["description"] = description; site_render_package(source, root, latest, versions, name)
+            site_write(root + "/" + name + ".md", "# " + name + "\n\n" + description + "\n\nInstall: `kennel add " + name + "`\n\nLatest stable: " + stable_version + "\n\nVersions: " + join(labels, ", ") + "\n\nMetadata: https://kennel.kujolang.ai/api/v1/packages/" + name + ".json\n\nProvenance: " + latest["provenance_url"] + "\n\nArchive SHA-256: " + latest["archive_sha256"] + "\n\nDependencies: " + to_json(latest["dependencies"]) + "\n")
+        }
+    }
+    site_write(root + "/api/v1/index.json", package_json({"schema_version": 1, "registry": "https://kennel.kujolang.ai", "packages": summaries}))
+    mut rows := ""
+    for summary in summaries { mut latest := summary["latest"]; if latest == "" { latest = "prerelease" }; rows = rows + "<li data-package><h2><a href=\"/" + summary["name"] + "\">" + summary["name"] + "</a><span class=\"version\">" + latest + "</span></h2><p>" + site_escape(summary["description"]) + "</p><span class=\"badge\">Official · kujolang</span></li>" }
+    mut body := "<p class=\"eyebrow\">The Kujo package registry</p><h1>Find your next tool.</h1><p class=\"intro\">Install released Kujo packages with verified checksums and traceable source.</p><code class=\"command\">kennel add changebucket</code><div class=\"search\"><label for=\"search\">Search official packages</label><input id=\"search\" type=\"search\" placeholder=\"Package name or description\" aria-describedby=\"count\"><p id=\"count\" role=\"status\">" + to_string(len(summaries)) + " packages</p></div><ul class=\"packages\">" + rows + "</ul>"
+    site_write(root + "/index.html", site_page(source, "Official Kujo packages", body, "", "Official released packages for Kujo."))
+    for asset in ["style.css", "search.js", "_headers"] { site_write(root + "/" + asset, read_file(source + "/scripts/registry/site/" + asset)) }
+    site_write(root + "/404.html", site_page(source, "Package not found", "<h1>Package not found.</h1><p><a href=\"/\">Browse official packages</a></p>", "", "Official released packages for Kujo."))
+    site_write(root + "/robots.txt", "User-agent: *\nAllow: /\n")
+    site_onboarding(source, root)
+    print(to_json({"packages": len(summaries), "index_bytes": file_size(root + "/api/v1/index.json")}))
+}

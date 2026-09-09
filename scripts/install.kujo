@@ -1,0 +1,2 @@
+from src.bootstrap import bootstrap_main
+try { bootstrap_main(args()) } except err { print("Kennel installer: " + to_string(err)); exit(1) }

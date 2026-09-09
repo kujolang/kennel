@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+KUJO_BIN=${KUJO_BIN:-kujo}
+command -v "$KUJO_BIN" >/dev/null 2>&1 || { echo 'Install a compatible Kujo runtime first.' >&2; exit 1; }
+installer_dir=$(mktemp -d)
+trap 'rm -rf "$installer_dir"' EXIT HUP INT TERM
+cat > "$installer_dir/fetch.kujo" <<'KUJO'
+mut target := args()[0]
+try {
+    mut token := file_lock(target + "/probe.lock", 0)
+    file_unlock(token)
+} except err { print("Upgrade Kujo to a release with native package primitives before installing Kennel."); exit(1) }
+mut response := http_request("https://kennel.kujolang.ai/install.kujo", {"method": "GET", "timeout": 30, "max_response_bytes": 1048576, "redirects": "none"})
+match response {
+    case Result::Ok(result): {
+        if result["status"] != 200 || sha256(result["_body_bytes"]) != "INSTALLER_SHA256" { print("Installer download/checksum mismatch; download install.sh again."); exit(1) }
+        write_file(target + "/install.kujo", result["_body_bytes"])
+    }
+    case Result::Err(message): { print("Installer download failed: " + to_string(message)); exit(1) }
+}
+KUJO
+"$KUJO_BIN" run "$installer_dir/fetch.kujo" --interpreter --isolated-imports -- "$installer_dir"
+"$KUJO_BIN" run "$installer_dir/install.kujo" --interpreter --isolated-imports -- "$@"

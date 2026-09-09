@@ -10,7 +10,7 @@ Protect package identity, exact release contents, existing installations, local 
 
 | Threat | Control and evidence |
 | --- | --- |
-| Unauthorized publication, rename/transfer, squatting | Explicit enabled package policy binds official unscoped name to public kujolang repository and immutable repository ID. Actual published Release API record and exact tag commit required. `scripts/registry/sync_releases.py`, `build_package.py`. |
+| Unauthorized publication, rename/transfer, squatting | Explicit enabled package policy binds official unscoped name to public kujolang repository and immutable repository ID. Actual published Release API record and exact tag commit required. `scripts/registry/sync_releases.kujo`, `build_package.kujo`. |
 | Working tree leakage/secrets | Read committed Git blobs only; explicit sources/include/exclude controls and mandatory secret/cache/build exclusions. Reject symlinks/submodules. No archive of the working directory. Arbitrary secrets deliberately committed inside allowed source cannot be identified perfectly. |
 | Version overwrite/partial publication | Existing version with different archive or release identity rejected. Retry preserves first provenance. Generate and validate everything before one registry commit; index written after version files. Git/Pages deployment is the publication unit. |
 | Dependency confusion/namespace ambiguity | Reserved official unscoped ownership, explicit scoped parser and registry override. No automatic search across arbitrary registries. Lock exact registry/version/artifact identity. |
