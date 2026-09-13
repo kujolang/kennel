@@ -23,8 +23,8 @@ try {
     checked(["sh", folder + "/install.sh"], settings, home, 0)
     launcher := base + "/bin/kennel"
     assert_equal(trim(checked([launcher, "--version"], settings, home, 0)), "Kennel " + version)
-    assert_true(contains(checked(["sh", "-c", ". \"$HOME/.kennel/env\"; command -v kennel; kennel --version"], settings, home, 0), "Kennel " + version))
-    for shell_profile in [".profile", ".bash_profile", ".bashrc", ".zshrc"] { assert_true(contains(read_file(home + "/" + shell_profile), "# >>> Kennel PATH >>>")) }
+    assert_true(contains(checked(["sh", "-c", ". \"$HOME/.kennel/env\"; command -v kennel; kennel --version"], settings, home, 0), "Kennel " + version) != 0)
+    for shell_profile in [".profile", ".bash_profile", ".bashrc", ".zshrc"] { assert_true(contains(read_file(home + "/" + shell_profile), "# >>> Kennel PATH >>>") != 0) }
     profile := read_file(home + "/.zshrc")
     checked(["sh", folder + "/install.sh"], settings, home, 0)
     assert_equal(read_file(home + "/.zshrc"), profile)
@@ -36,7 +36,7 @@ try {
         checked([launcher, "add", name], settings, project, 0)
         uncached := current_timestamp() - started
         lock := read_file(project + "/kennel.lock")
-        assert_true(contains(lock, "registry-statement-verified") && contains(lock, latest) && contains(lock, "https://kennel.kujolang.ai"))
+        assert_true(contains(lock, "registry-statement-verified") != 0 && contains(lock, latest) != 0 && contains(lock, "https://kennel.kujolang.ai") != 0)
         global_delete(project + "/kennel_packages")
         started = current_timestamp(); checked([launcher, "install"], settings, project, 0)
         assert_equal(read_file(project + "/kennel.lock"), lock)
