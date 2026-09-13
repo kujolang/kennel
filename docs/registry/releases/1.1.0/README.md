@@ -24,6 +24,7 @@ Kennel 1.1.0 is released and installable anonymously from https://kennel.kujolan
 | `bash scripts/verify-profiles.sh full` after delivery corrections | PASS |
 | [Delivery correction CI](https://github.com/kujolang/kennel/actions/runs/34782270571) | PASS: all eight jobs |
 | [Public bootstrap acceptance](https://github.com/kujolang/kennel/actions/runs/34782478651) | PASS: GitHub-hosted macOS and Linux, released Kujo 1.4.0 and publicly installed Kennel 1.1.0 |
+| [Final acceptance-harness CI](https://github.com/kujolang/kennel/actions/runs/34782441437) | PASS: all eight jobs |
 | Same public acceptance on local Intel macOS | PASS |
 | All-package pre-publication candidate check | 36/36 fresh downloads and 36/36 cached lock replays with Git disabled; see `catalog-before-publication.jsonl` |
 | Historical immutability | All 190 pre-existing immutable files retained their SHA-256 values |
