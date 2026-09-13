@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kennel
-          ref: cc3a74e1091d8771f9d3f24410c77db52030503f
+          ref: 562e66a5f58dfbe1136c3c6880da60e35831de07
           path: publisher
           persist-credentials: false
       - name: Restore pinned publisher runtime
