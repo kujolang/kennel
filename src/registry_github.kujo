@@ -1,0 +1,25 @@
+# Read-only GitHub API requests. Retry transport/temporary service failures only.
+# Identity, schema, authorization and package validation failures remain fatal.
+export func github_transient_failure(stderr, timed_out) {
+    if timed_out { return true }
+    mut text := to_lower(stderr)
+    for marker in ["http 429", "http 500", "http 502", "http 503", "http 504", "tls handshake timeout", "connection reset", "temporary failure", "i/o timeout", "unexpected eof"] {
+        if contains(text, marker) { return true }
+    }
+    return false
+}
+export func github_api(path) {
+    if starts_with(path, "repos/kujolang/") == false { throw("GitHub publisher reads must target the official organization") }
+    mut attempt := 0
+    while attempt < 4 {
+        mut result := spawn_process(["gh", "api", path], {"timeout_ms": 30000, "max_output_bytes": 8388608})
+        if result.stdout_truncated || result.stderr_truncated { throw("GitHub response exceeds publisher limits") }
+        if result.success { return parse_json(result.stdout) }
+        attempt = attempt + 1
+        if attempt == 4 || github_transient_failure(result.stderr, result.timed_out) == false {
+            throw("GitHub API read failed after " + to_string(attempt) + " attempt(s): " + path + "\n" + result.stderr)
+        }
+        sleep(1000 * attempt)
+    }
+    throw("GitHub API retry limit exceeded")
+}

@@ -1,6 +1,6 @@
 # Kennel 1.1.0 native release candidate
 
-Status: unpublished, for review. No tag or release is created by this migration. The previous installer PRs were merged; this follow-up replaces their Python implementation with native Kujo scripts before release.
+Status: release checklist for Kennel 1.1.0. Publication and production acceptance are recorded in the release evidence. The previous installer PRs were merged; this follow-up replaces their Python implementation with native Kujo scripts before release.
 
 ## What changed
 
@@ -14,7 +14,7 @@ No consumer Python requirement remains. Git is required for source-review instal
 
 ## Compatibility and release order
 
-The published Kujo 1.3.1 lacks the required source capabilities. Use a build with `--isolated-imports`, `file_lock`, `file_unlock`, `exec_process`, `symlink_atomic` and `path_owned`. Release that compatible Kujo runtime before Kennel 1.1.0. Choose/synchronize Kujo’s version and release-state documents only when approving its complete Unreleased scope.
+Kujo 1.4.0 was published on September 9, 2026 and supplies `--isolated-imports`, `file_lock`, `file_unlock`, `exec_process`, `symlink_atomic` and `path_owned`. Use its exact released binary for consumer acceptance and its release commit for source-built CI.
 
 Installer protocol 2 denotes the native bootstrap. This does not change registry protocol v1 or lockfile schema 1. Existing client symlink, launcher, global state and generation layouts are preserved; existing protocol-1 source installations can be replaced through an explicit native source install. Public bootstrap rejects historical releases without the native marker. Never replace an immutable old archive.
 

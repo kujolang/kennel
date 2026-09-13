@@ -3,7 +3,7 @@ from src.registry_protocol import registry_valid_version
 from src.registry_site import site_generate
 from src.global_common import global_capture, global_options, global_delete, global_contains
 from src.utils import dict_get_or
-func github_api(path) { return parse_json(global_capture(["gh", "api", path], {})) }
+from src.registry_github import github_api
 mut options := global_options(args(), ["--root", "--policy", "--package", "--release-id"], [])
 mut root := options["--root"]; mut policy := json_file_read(options["--policy"], 8388608)
 mut only_package := dict_get_or(options, "--package", ""); mut only_release := dict_get_or(options, "--release-id", "")

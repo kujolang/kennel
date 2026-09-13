@@ -1,10 +1,10 @@
 # Global tools and the Kennel installer
 
-Status: 1.1.0 release candidate, not published. The latest historical release remains immutable. macOS and Linux are supported; Windows users need a Linux environment such as WSL. A compatible Kujo runtime is required. Kennel’s installer, command activation, self-update and release publisher are Kujo-native. Python is not an installation or publishing dependency. The existing resolver, checksums, provenance, extraction, cache and lockfiles are reused. There is no second package resolver or package execution hook.
+Version: 1.1.0. The latest historical release remains immutable. macOS and Linux are supported; Windows users need a Linux environment such as WSL. A compatible Kujo runtime is required. Kennel’s installer, command activation, self-update and release publisher are Kujo-native. Python is not an installation or publishing dependency. The existing resolver, checksums, provenance, extraction, cache and lockfiles are reused. There is no second package resolver or package execution hook.
 
 ## Review before release
 
-**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports` and the native package primitives (`file_lock`, `file_unlock`, `exec_process`, `symlink_atomic`, `path_owned`). The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
+**Runtime prerequisite:** install [Kujo 1.4.0](https://github.com/kujolang/kujo/releases/tag/v1.4.0) or newer. It provides isolated imports and the native package primitives required by Kennel. The installer rejects incompatible runtimes.
 
 
 Build the updated Kujo checkout with `cargo build --release --bin kujo`, then export `KUJO_BIN=/absolute/path/to/kujo/target/release/kujo`. From this Kennel checkout:

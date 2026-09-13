@@ -1,0 +1,42 @@
+name: Released client production acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing published Kennel release tag
+        required: true
+        default: v1.1.0
+permissions:
+  contents: read
+jobs:
+  public-bootstrap:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.version }}
+      - name: Install published Kujo
+        id: runtime
+        uses: kujolang/kujo/.github/actions/setup-kujo@266a8902068a14c3d17f803bef467dc28f1fe162
+        with:
+          version: v1.4.0
+      - name: Verify public bootstrap and lifecycle
+        env:
+          KUJO_BIN: ${{ steps.runtime.outputs.kujo-path }}
+          KUJO_MODULE_PATH: ${{ github.workspace }}
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          export KENNEL_EXPECTED_VERSION="${RELEASE_TAG#v}"
+          mkdir -p artifacts/acceptance
+          "$KUJO_BIN" run scripts/registry/public_bootstrap_e2e.kujo --interpreter --isolated-imports | tee artifacts/acceptance/public-bootstrap.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-acceptance-${{ matrix.os }}
+          path: artifacts/acceptance
+          if-no-files-found: error

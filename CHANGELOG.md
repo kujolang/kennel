@@ -1,20 +1,22 @@
 # Changelog
 
-## 1.1.0 — Unreleased
+## [1.1.0] - 2026-09-13
 
 - Official HTTPS package distribution, verified immutable archives, provenance consistency checks and content-addressed cache.
 - Per-user installer and `kennel` launcher, runtime checks, repeatable PATH setup and `kennel self update`.
 - `kennel tool install/update/list/remove`: isolated global packages, explicit `[bin]` commands, legacy `[kujo].entry` fallback, atomic activation and command collision protection.
 - Registry website onboarding, Tabler copy controls, mobile navigation and official Kujo typography.
 
-This is a review candidate. No GitHub Release or registry artifact for 1.1.0 has been published.
+- Kujo-native bootstrap, global command management and deterministic release publishing; no consumer Python dependency.
+- Requires published Kujo 1.4.0 or newer.
+- Bounded retries recover transient GitHub API read failures while authorization, schema and integrity failures remain fatal.
 
 ### Registry foundation
 
 - Native HTTPS registry resolution, verified release archives, safe staging extraction and content-addressed caching.
 - Additive schema-1 lock metadata for exact archives and release provenance.
 - Central deterministic release builder, reusable GitHub Release publication, static Pages registry and historical-release backfill.
-- Remote installation requires Kujo 1.3.1; existing local/source and hosted command contracts are preserved.
+- Installation requires Kujo 1.4.0; existing local/source and hosted command contracts are preserved.
 
 ## [1.0.1] - 2026-08-30
 

@@ -1,0 +1,24 @@
+from src.registry_github import github_api, github_transient_failure
+from src.global_common import global_delete
+assert_true(github_transient_failure("gh: unavailable (HTTP 504)", false))
+assert_true(github_transient_failure("gh: rate limited (HTTP 429)", false))
+assert_true(github_transient_failure("", true))
+assert_false(github_transient_failure("gh: forbidden (HTTP 403)", false))
+assert_false(github_transient_failure("gh: missing (HTTP 404)", false))
+root := create_temp_dir(path_absolute("/tmp"), "kennel-gh-retry-")
+original := env("PATH")
+try {
+    write_file(root + "/gh", "#!/bin/sh\ncount=0\n[ ! -f \"$RETRY_COUNTER\" ] || read -r count < \"$RETRY_COUNTER\"\ncount=$((count + 1))\nprintf '%s\\n' \"$count\" > \"$RETRY_COUNTER\"\nif [ \"$RETRY_MODE\" = transient ] && [ \"$count\" -lt 3 ]; then printf '%s\\n' 'gh: unavailable (HTTP 504)' >&2; exit 1; fi\nif [ \"$RETRY_MODE\" = forbidden ]; then printf '%s\\n' 'gh: forbidden (HTTP 403)' >&2; exit 1; fi\nif [ \"$RETRY_MODE\" = malformed ]; then printf '%s\\n' 'not-json'; exit 0; fi\nprintf '%s\\n' '{\"id\":123}'\n")
+    io_set_permissions(root + "/gh", 493)
+    env_set("PATH", root + ":" + original); env_set("RETRY_COUNTER", root + "/counter"); env_set("RETRY_MODE", "transient")
+    assert_equal(github_api("repos/kujolang/kennel")["id"], 123)
+    assert_equal(trim(read_file(root + "/counter")), "3")
+    for mode in ["forbidden", "malformed"] {
+        delete_file(root + "/counter"); env_set("RETRY_MODE", mode)
+        mut failed := false
+        try { github_api("repos/kujolang/kennel") } except err { failed = true }
+        assert_true(failed); assert_equal(trim(read_file(root + "/counter")), "1")
+    }
+} except err { env_set("PATH", original); global_delete(root); throw(err) }
+env_set("PATH", original); global_delete(root)
+print("GitHub read retries: transient recovery, authorization and malformed data fail closed")

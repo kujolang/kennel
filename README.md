@@ -1,6 +1,6 @@
 # Kennel
 
-[![Version](https://img.shields.io/badge/version-1.0.1-black)](https://github.com/kujolang/kennel)
+[![Version](https://img.shields.io/badge/version-1.1.0-black)](https://github.com/kujolang/kennel)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
 
@@ -10,10 +10,10 @@ Official first-party distribution is available through the versioned HTTPS proto
 
 ## Official Kennel Registry
 
-**Runtime prerequisite for this candidate:** use a Kujo source build containing `kujo run --isolated-imports` and the native package primitives (`file_lock`, `file_unlock`, `exec_process`, `symlink_atomic`, `path_owned`). The published Kujo 1.3.1 release lacks this capability. The installer checks for it and refuses incompatible runtimes. A compatible Kujo runtime must be released before public Kennel 1.1.0 installation.
+**Runtime prerequisite:** install [Kujo 1.4.0](https://github.com/kujolang/kujo/releases/tag/v1.4.0) or newer. It provides isolated imports and the native package primitives required by Kennel. The installer rejects incompatible runtimes.
 
 
-The **1.1.0 release candidate** adds global commands and a per-user installer. It is not yet an official release. Review on macOS/Linux with a compatible Kujo source build and Git (Git is needed only for source review):
+Kennel **1.1.0** adds global commands and a per-user installer for macOS/Linux. To install from a reviewed source checkout, Git is required:
 
 ```bash
 "${KUJO_BIN:-kujo}" run scripts/install.kujo --interpreter -- --source .
@@ -25,7 +25,7 @@ shipcheck --help
 
 The source installer copies tracked checkout files, including reviewed local edits. For an isolated review without shell profile changes, use `--home /absolute/review-directory --no-modify-path` and invoke its `bin/kennel`. `KUJO_BIN` selects a non-default Kujo executable; keep it set when invoking the installed tools if Kujo is not otherwise on PATH.
 
-After the first installer-enabled release, users can download the registry installer:
+Install the released client from the registry:
 
 ```bash
 curl -fsSLO https://kennel.kujolang.ai/install.sh
@@ -82,7 +82,7 @@ Validated in current project automation:
 
 Toolchain assumptions:
 
-- A Kujo build with `--isolated-imports` support, available as `kujo` or overridden with `KUJO_BIN` (currently unreleased; see the candidate instructions above)
+- Kujo 1.4.0 or newer, available as `kujo` or overridden with `KUJO_BIN`
 - Bash available for verification scripts
 
 The installed launcher supports `kennel --version`. Direct `kujo run kennel.kujo` retains the existing native CLI contract.

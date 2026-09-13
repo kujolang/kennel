@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 KUJO_BIN=${KUJO_BIN:-kujo}
-command -v "$KUJO_BIN" >/dev/null 2>&1 || { echo 'Install a compatible Kujo runtime first.' >&2; exit 1; }
+command -v "$KUJO_BIN" >/dev/null 2>&1 || { echo 'Install Kujo 1.4.0 or newer first.' >&2; exit 1; }
 installer_dir=$(mktemp -d)
 trap 'rm -rf "$installer_dir"' EXIT HUP INT TERM
 cat > "$installer_dir/fetch.kujo" <<'KUJO'
@@ -9,7 +9,7 @@ mut target := args()[0]
 try {
     mut token := file_lock(target + "/probe.lock", 0)
     file_unlock(token)
-} except err { print("Upgrade Kujo to a release with native package primitives before installing Kennel."); exit(1) }
+} except err { print("Upgrade to Kujo 1.4.0 or newer before installing Kennel."); exit(1) }
 mut response := http_request("https://kennel.kujolang.ai/install.kujo", {"method": "GET", "timeout": 30, "max_response_bytes": 1048576, "redirects": "none"})
 match response {
     case Result::Ok(result): {

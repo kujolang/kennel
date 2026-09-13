@@ -1,0 +1,66 @@
+# Publication-dependent acceptance: real public installer and released client only.
+from src.global_common import global_delete, global_runtime
+from src.registry_transport import registry_get, registry_json
+from src.utils import ensure_dir
+runtime := global_runtime()
+version := env_or("KENNEL_EXPECTED_VERSION", "1.1.0")
+folder := create_temp_dir(path_absolute("/tmp"), "kennel-public-acceptance-")
+home := folder + "/home"; ensure_dir(home)
+base := home + "/.kennel"
+settings := {"HOME": home, "KENNEL_HOME": base, "KUJO_BIN": runtime, "KUJO_MODULE_PATH": "", "KUJO_ISOLATED_IMPORTS": "1"}
+func checked(argv, settings, cwd, expected) {
+    mut result := spawn_process(argv, {"env": settings, "cwd": cwd, "timeout_ms": 180000, "max_output_bytes": 8388608})
+    if result.exitcode != expected || result.timed_out || result.stdout_truncated || result.stderr_truncated { throw(to_json(argv) + "\n" + result.stdout + result.stderr) }
+    return result.stdout
+}
+mut receipt := {"version": version, "runtime": trim(checked([runtime, "--version"], settings, folder, 0)), "packages": {}, "checks": []}
+try {
+    # Dependency installation never requires Git or Python; scripts fail if invoked.
+    ensure_dir(folder + "/guards")
+    for name in ["git", "python", "python3"] { write_file(folder + "/guards/" + name, "#!/bin/sh\necho Unexpected consumer dependency >&2\nexit 97\n"); io_set_permissions(folder + "/guards/" + name, 493) }
+    settings["PATH"] = folder + "/guards:" + env("PATH")
+    write_file(folder + "/install.sh", registry_get("https://kennel.kujolang.ai/install.sh", 1048576)["body"])
+    checked(["sh", folder + "/install.sh"], settings, home, 0)
+    launcher := base + "/bin/kennel"
+    assert_equal(trim(checked([launcher, "--version"], settings, home, 0)), "Kennel " + version)
+    assert_true(contains(checked(["sh", "-c", ". \"$HOME/.kennel/env\"; command -v kennel; kennel --version"], settings, home, 0), "Kennel " + version))
+    for shell_profile in [".profile", ".bash_profile", ".bashrc", ".zshrc"] { assert_true(contains(read_file(home + "/" + shell_profile), "# >>> Kennel PATH >>>")) }
+    profile := read_file(home + "/.zshrc")
+    checked(["sh", folder + "/install.sh"], settings, home, 0)
+    assert_equal(read_file(home + "/.zshrc"), profile)
+    for name in ["changebucket", "kennel"] {
+        latest := registry_json("https://kennel.kujolang.ai/api/v1/packages/" + name + ".json")["latest"]
+        project := folder + "/" + name; ensure_dir(project)
+        checked([launcher, "init", "--name", "public-acceptance"], settings, project, 0)
+        started := current_timestamp()
+        checked([launcher, "add", name], settings, project, 0)
+        uncached := current_timestamp() - started
+        lock := read_file(project + "/kennel.lock")
+        assert_true(contains(lock, "registry-statement-verified") && contains(lock, latest) && contains(lock, "https://kennel.kujolang.ai"))
+        global_delete(project + "/kennel_packages")
+        started = current_timestamp(); checked([launcher, "install"], settings, project, 0)
+        assert_equal(read_file(project + "/kennel.lock"), lock)
+        receipt["packages"][name] = {"version": latest, "uncached_ms": uncached, "cached_ms": current_timestamp() - started, "lock_sha256": sha256(lock)}
+        exact := folder + "/" + name + "-exact"; ensure_dir(exact)
+        checked([launcher, "init", "--name", "exact-acceptance"], settings, exact, 0)
+        checked([launcher, "add", name + "@" + latest], settings, exact, 0)
+        clean := folder + "/" + name + "-clean"; ensure_dir(clean); global_delete(base + "/cache")
+        checked([launcher, "init", "--name", "clean-acceptance"], settings, clean, 0)
+        checked([launcher, "add", name], settings, clean, 0)
+    }
+    checked([launcher, "tool", "install", "shipcheck", "--allow-shadow"], settings, home, 0)
+    assert_true(trim(checked([base + "/bin/shipcheck", "--help"], settings, home, 0)) != "")
+    checked([launcher, "tool", "update", "shipcheck", "--allow-shadow"], settings, home, 0)
+    checked([launcher, "self", "update"], settings, home, 0)
+    assert_equal(trim(checked([launcher, "--version"], settings, home, 0)), "Kennel " + version)
+    before := path_absolute(base + "/client")
+    checked([launcher, "self", "update", "--version", "1.0.1"], settings, home, 1)
+    assert_equal(path_absolute(base + "/client"), before)
+    assert_true(trim(checked([base + "/bin/shipcheck", "--help"], settings, home, 0)) != "")
+    checked([launcher, "tool", "remove", "shipcheck"], settings, home, 0)
+    assert_false(path_exists(base + "/bin/shipcheck"))
+    receipt["checks"] = ["public bootstrap", "PATH and profiles", "idempotent bootstrap", "latest/exact/clean/cached installs", "deterministic lock", "no Git or Python for consumers", "global command", "tool update", "self update", "failed update rollback", "tool removal"]
+    receipt["passed"] = true
+} except err { global_delete(folder); throw(err) }
+global_delete(folder)
+print(to_json(receipt))
