@@ -40,7 +40,7 @@ try {
         global_delete(project + "/kennel_packages")
         started = current_timestamp(); checked([launcher, "install"], settings, project, 0)
         assert_equal(read_file(project + "/kennel.lock"), lock)
-        receipt["packages"][name] = {"version": latest, "uncached_ms": uncached, "cached_ms": current_timestamp() - started, "lock_sha256": sha256(lock)}
+        package_receipts := receipt["packages"]; package_receipts[name] = {"version": latest, "uncached_ms": uncached, "cached_ms": current_timestamp() - started, "lock_sha256": sha256(lock)}; receipt["packages"] = package_receipts
         exact := folder + "/" + name + "-exact"; ensure_dir(exact)
         checked([launcher, "init", "--name", "exact-acceptance"], settings, exact, 0)
         checked([launcher, "add", name + "@" + latest], settings, exact, 0)

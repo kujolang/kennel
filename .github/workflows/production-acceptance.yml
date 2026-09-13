@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.version }}
+          ref: ${{ github.sha }} # Acceptance harness; client is installed from the public registry
       - name: Install published Kujo
         id: runtime
         uses: kujolang/kujo/.github/actions/setup-kujo@266a8902068a14c3d17f803bef467dc28f1fe162
