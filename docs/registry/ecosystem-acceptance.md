@@ -1,5 +1,7 @@
 # Ecosystem production acceptance — 2026-09-08
 
+> Historical September 8 evidence. For the released native client and current public installer, see [Kennel 1.1.0 production acceptance](releases/1.1.0/README.md).
+
 **36 packages and 38 actual released versions are live at https://kennel.kujolang.ai.** The [enrollment inventory](https://github.com/kujolang/kennel-registry/blob/main/ENROLLMENT.md) accounts for all 41 entries on the Kujo primitives and tooling pages, including five explicit coverage boundaries. No private source or invented release was published.
 
 ## Verified results

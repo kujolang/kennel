@@ -1,6 +1,6 @@
-# Kennel 1.1.0 native release candidate
+# Kennel 1.1.0 native release
 
-Status: release checklist for Kennel 1.1.0. Publication and production acceptance are recorded in the release evidence. The previous installer PRs were merged; this follow-up replaces their Python implementation with native Kujo scripts before release.
+Status: released September 13, 2026. [Production acceptance and exact evidence](releases/1.1.0/README.md) supersede the pre-release checklist below.
 
 ## What changed
 
@@ -40,7 +40,7 @@ bash scripts/verify-profiles.sh full
 
 Current verification receipts belong in the review PRs and handoff; a local partial run is never a substitute for clean full CI. The native test suites cover profile preservation, exact arguments/cwd, conflicting caller modules, lifecycle, ownership, obsolete shim removal, failed activation rollback, deterministic archives, immutable publication and integrity failures. The original registry regression suite now calls the native builder while generating independent hostile archives.
 
-After actual releases, verify the public installer from a fresh home, version output, project/global installs, updates, cached installs, Pages metadata/artifacts and removal of the preview notice. These publication-dependent checks remain future release gates.
+After actual releases, verify the public installer from a fresh home, version output, project/global installs, updates, cached installs, Pages metadata/artifacts and removal of the preview notice. These publication-dependent checks passed; see the linked production evidence.
 
 ## Boundaries
 

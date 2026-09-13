@@ -1,5 +1,7 @@
 # Static registry production acceptance
 
+> Historical September 8 evidence. For the released native client and current public installer, see [Kennel 1.1.0 production acceptance](releases/1.1.0/README.md).
+
 For current ecosystem coverage, see [36-package production acceptance](ecosystem-acceptance.md). The initial two-package milestone below is retained as historical evidence.
 
 2026-09-08: **the static registry is live at https://kennel.kujolang.ai and real package installation passes.** Consumers provide package names, not GitHub source URLs. Acceptance used the updated Kennel client on main and Kujo 1.3.1. Historical Kennel releases retain their original behavior; no test release or replacement artifact was created.
