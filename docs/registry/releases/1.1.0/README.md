@@ -45,3 +45,11 @@ These fixes affect mutable registry delivery, not the released client archive. R
 Public reads use static protocol v1; lock schema 1 is retained. Provenance verifies consistency with the trusted HTTPS registry, not an independent signature. Unscoped names remain first-party reserved. Accounts, third-party publishing, Windows bootstrap, metadata ETag caching, independent archive signatures and automatic old-generation pruning are outside this release.
 
 Existing enrolled repositories publish through actual GitHub Releases. Reconciliation is scheduled every 15 minutes, subject to GitHub scheduling delays; maintainers can dispatch it manually. New repositories still require explicit enrollment and valid release manifests. No accounts, server, database, Worker or object store was added to the registry.
+
+## Discovery surfaces
+
+- [Main website deployment](https://github.com/kujolang/kujolang.ai/actions/runs/34782757006): PASS. The live Kennel page advertises 1.1.0 and the native installer. The complete 242-page build and site contracts passed.
+- [Final docs CI](https://github.com/kujolang/docs.kujolang.ai/actions/runs/34783847625) and [Pages deployment](https://github.com/kujolang/docs.kujolang.ai/actions/runs/34783848414): PASS. All 103 HTML pages passed validation. The live homepage shows Kujo Docs 1.4.0, updated September 13, 2026; package guides use the released client.
+- [MCP validation](https://github.com/kujolang/kujolang-mcp/actions/runs/34782798184): PASS. Production parity compared all 230 records and six installation profiles. The Kennel record uses 1.1.0 and the public installer; catalog revision is `d327a84019c0c8a9357e00757ddd71fa8790d164f031da82b12fa279baff8526`.
+
+All modified repositories were committed, pushed and verified clean. The existing user's Kujo executable and unrelated work were preserved; consumer testing used an independently verified published Kujo 1.4.0 binary in isolated homes.
