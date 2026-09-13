@@ -1,0 +1,22 @@
+from src.global_common import global_runtime, global_delete
+from src.utils import ensure_dir
+root := path_absolute(os_getcwd())
+folder := create_temp_dir(path_absolute("/tmp"), "kennel-bundle-test-")
+try {
+    runtime := global_runtime()
+    for output in ["first.kujo", "second.kujo"] {
+        built := spawn_process([runtime, "run", root + "/scripts/bundle_installer.kujo", "--interpreter", "--isolated-imports", "--", root, folder + "/" + output], {"timeout_ms": 30000, "max_output_bytes": 1048576})
+        assert_equal(built.exitcode, 0)
+    }
+    assert_equal(read_file(folder + "/first.kujo"), read_file(folder + "/second.kujo"))
+    home := folder + "/home"; ensure_dir(home)
+    settings := {"HOME": home, "KUJO_BIN": runtime, "KUJO_MODULE_PATH": "", "KENNEL_HOME": home + "/.kennel"}
+    installed := spawn_process([runtime, "run", folder + "/first.kujo", "--interpreter", "--isolated-imports", "--", "--source", root], {"env": settings, "cwd": home, "timeout_ms": 180000, "max_output_bytes": 1048576})
+    assert(installed.exitcode == 0, installed.stdout + installed.stderr)
+    checked := spawn_process([home + "/.kennel/bin/kennel", "--version"], {"env": settings, "cwd": home, "timeout_ms": 30000, "max_output_bytes": 1048576})
+    assert_equal(checked.exitcode, 0)
+    assert_equal(trim(checked.stdout), "Kennel " + parse_toml(read_file(root + "/kennel.toml"))["package"]["version"])
+    assert_true(path_is_file(home + "/.kennel/env"))
+} except err { global_delete(folder); throw(err) }
+global_delete(folder)
+print("Standalone module bundle is deterministic and installs a working client with PATH setup: passed")

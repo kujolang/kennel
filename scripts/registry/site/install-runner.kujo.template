@@ -1,0 +1,17 @@
+installer_workspace := create_temp_dir(path_absolute("/tmp"), "kennel-installer-modules-")
+func installer_cleanup(directory, modules) {
+    for filename in keys(modules) { if path_is_file(directory + "/" + filename) { delete_file(directory + "/" + filename) } }
+    for folder in ["src", "scripts"] { if path_is_dir(directory + "/" + folder) { os_rmdir(directory + "/" + folder) } }
+    os_rmdir(directory)
+}
+try {
+    create_dir(installer_workspace + "/src"); create_dir(installer_workspace + "/scripts")
+    for filename in keys(installer_modules) { write_file(installer_workspace + "/" + filename, join(installer_modules[filename], "\n")) }
+    installer_runtime := env_or("KUJO_BIN", "kujo")
+    installer_result := spawn_process(concat([installer_runtime, "run", installer_workspace + "/scripts/install.kujo", "--interpreter", "--isolated-imports", "--"], args()), {"env": {"KUJO_MODULE_PATH": installer_workspace, "KUJO_ISOLATED_IMPORTS": "1"}, "timeout_ms": 300000, "max_output_bytes": 1048576})
+    if installer_result.stdout != "" { print(installer_result.stdout) }
+    if installer_result.stderr != "" { print(installer_result.stderr) }
+    installer_cleanup(installer_workspace, installer_modules)
+    if installer_result.timed_out || installer_result.stdout_truncated || installer_result.stderr_truncated { print("Kennel installer exceeded its execution bounds"); exit(1) }
+    exit(installer_result.exitcode)
+} except err { installer_cleanup(installer_workspace, installer_modules); print("Kennel installer: " + to_string(err)); exit(1) }
