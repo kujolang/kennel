@@ -1,0 +1,28 @@
+from src.global_common import global_runtime, global_delete
+from src.utils import ensure_dir
+root := create_temp_dir(path_absolute("/tmp"), "kennel-fetch-test-")
+try {
+    template := read_file("scripts/registry/site/install.sh.template")
+    code := split(split(template, "<<'KUJO'\n")[1], "\nKUJO\n")[0]
+    payload := decode_base64(encode_base64("print(\"verified installer\")\n"))
+    for line in split(code, "\n") {
+        if starts_with(line, "mut response := http_request(") {
+            code = replace(code, line, "mut response := Result::Ok({\"status\": 200, \"_body_bytes\": decode_base64(\"" + encode_base64(payload) + "\")})")
+        }
+    }
+    for valid in [true, false] {
+        target := root + "/" + to_string(valid); ensure_dir(target)
+        digest := sha256(payload); if valid == false { digest = repeat("0", 64) }
+        write_file(root + "/fetch.kujo", replace(code, "INSTALLER_SHA256", digest), true)
+        result := spawn_process([global_runtime(), "run", root + "/fetch.kujo", "--interpreter", "--isolated-imports", "--", target], {"timeout_ms": 30000, "max_output_bytes": 1048576})
+        if valid {
+            assert_equal(result.exitcode, 0)
+            assert_equal(io_read_bytes(target + "/install.kujo", 1048576), payload)
+        } else {
+            assert_equal(result.exitcode, 1)
+            assert_false(path_exists(target + "/install.kujo"))
+        }
+    }
+} except err { global_delete(root); throw(err) }
+global_delete(root)
+print("Public fetch template preserves verified response bytes and rejects checksum mismatch: passed")

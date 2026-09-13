@@ -14,7 +14,7 @@ mut response := http_request("https://kennel.kujolang.ai/install.kujo", {"method
 match response {
     case Result::Ok(result): {
         if result["status"] != 200 || sha256(result["_body_bytes"]) != "INSTALLER_SHA256" { print("Installer download/checksum mismatch; download install.sh again."); exit(1) }
-        write_file(target + "/install.kujo", result["_body_bytes"])
+        io_write_bytes(target + "/install.kujo", result["_body_bytes"])
     }
     case Result::Err(message): { print("Installer download failed: " + to_string(message)); exit(1) }
 }
