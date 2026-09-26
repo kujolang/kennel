@@ -9,3 +9,9 @@ Backfill: dispatch `kujolang/kennel-registry` workflow `releases.yml`, optionall
 Historical Changebucket v1.0.0 uses ChangeBudget source at commit `bea11cf488aa916b68cab5e178378eeb10c0bb82`. A policy entry pinned to this commit permits deriving `kennel.toml` from its original `kujo.toml`, preserving version and recording original identity/generated manifest digest in provenance. All released code bytes remain unchanged; no license is invented.
 
 No SBOM is fabricated. The existing release SBOM/attestation workflow remains available; its attestation applies to the SBOM, not these archives. Future archive attestations should be verified independently and exposed through additive metadata.
+
+## Reviewed Git dependencies
+
+A package needs a published GitHub Release to be enrolled; its existing Git dependencies need not have separate registry releases. A commit-pinned `release_manifests` policy may use `dependency_git_pins` to normalize a legacy `{ source, ref }` declaration to `{ source, commit }`. Each mapping names an already enrolled official repository and records the exact original declaration and target commit. A 40-character ref must equal that commit; a version tag is independently resolved with Git (including annotated-tag peeling) and must match. Branches, repository changes, extra source selectors and retargeted commits are rejected. Generated-manifest digests and the complete mapping appear in provenance; released source files remain unchanged.
+
+These packages require Git and access to the dependency repository on install/replay; they are not registry-only/offline packages. Locks retain the exact Git commit. Do not claim the entire catalog installs with Git disabled once such packages are enrolled. No missing dependency release or version is fabricated.

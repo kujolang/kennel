@@ -92,6 +92,30 @@ func package_source_blob(repo, oid, scratch) {
     if result.success == false || result.stdout_truncated { throw("Cannot read bounded release blob") }
     return io_read_bytes(path, 8388608)
 }
+# Explicit reviewed projections preserve dependency source identity while making
+# legacy ref selectors consumable by released clients and strict source policy.
+export func package_git_dependency_pin(declared, target, approved, remote_refs) {
+    mut source := "github:" + dict_get_or(approved, "repository", "")
+    mut commit := dict_get_or(target, "commit", "")
+    if declared != target["original"] || len(keys(declared)) != 2 || dict_get_or(declared, "source", "") != source || dict_get_or(approved, "official", false) != true || dict_get_or(approved, "enabled", false) != true || regex_match(source, "^github:kujolang/[a-zA-Z0-9_.-]+$") == false || regex_match(commit, "^[0-9a-f]{40}$") == false { throw("Git dependency pin does not match reviewed source") }
+    mut ref := dict_get_or(declared, "ref", "")
+    if regex_match(ref, "^[0-9a-f]{40}$") {
+        if ref != commit { throw("Git dependency pin changes exact source commit") }
+    } else {
+        if starts_with(ref, "v") == false || registry_valid_version(substring(ref, 1, len(ref))) == false { throw("Git dependency pin requires an exact commit or version tag") }
+        mut direct := ""; mut peeled := ""
+        for row in split(trim(remote_refs), "\n") {
+            mut pair := split(row, "\t")
+            if len(pair) == 2 {
+                if pair[1] == "refs/tags/" + ref { direct = pair[0] }
+                if pair[1] == "refs/tags/" + ref + "^{}" { peeled = pair[0] }
+            }
+        }
+        mut resolved := direct; if peeled != "" { resolved = peeled }
+        if direct == "" || resolved != commit { throw("Git dependency tag differs from reviewed commit") }
+    }
+    return {"source": source, "commit": commit}
+}
 export func package_build(repo, commit, release, policy, workflow, base) {
     commit = trim(package_git(repo, ["rev-parse", "--verify", commit + "^{commit}"]))
     mut tracked := split(trim(package_git(repo, ["ls-tree", "--name-only", commit])), "\n")
@@ -120,6 +144,17 @@ export func package_build(repo, commit, release, policy, workflow, base) {
             if declared != target["original"] || target["commit"] != dict_get_or(dict_get_or(approved, "release_commits", {}), target["version"], "") { throw("Dependency projection does not match release source or approved release") }
             if dict_get_or(declared, "commit", dict_get_or(declared, "ref", "")) != target["commit"] || declared["source"] != "github:" + approved["repository"] { throw("Dependency projection changes pinned source") }
             dependencies[dep] = {"source": "registry:" + base + "/api/v1/packages/" + target["package"] + "/" + target["version"] + ".json"}
+        }
+        mut git_pins := dict_get_or(projection, "dependency_git_pins", {})
+        for dep in keys(git_pins) {
+            mut target := git_pins[dep]; mut declared := dict_get_or(dependencies, dep, {})
+            mut approved := dict_get_or(policy["packages"], target["package"], {})
+            if declared != target["original"] || dict_get_or(declared, "source", "") != "github:" + dict_get_or(approved, "repository", "") { throw("Git dependency pin does not match reviewed source") }
+            mut ref := dict_get_or(declared, "ref", ""); mut remote_refs := ""
+            if starts_with(ref, "v") && registry_valid_version(substring(ref, 1, len(ref))) && regex_match(dict_get_or(approved, "repository", ""), "^kujolang/[a-zA-Z0-9_.-]+$") {
+                remote_refs = package_git(repo, ["ls-remote", "https://github.com/" + approved["repository"] + ".git", "refs/tags/" + ref, "refs/tags/" + ref + "^{}"])
+            }
+            dependencies[dep] = package_git_dependency_pin(declared, target, approved, remote_refs)
         }
         manifest["dependencies"] = dependencies; synthetic = package_bytes(to_toml(manifest))
     } else if global_contains(tracked, "kennel.toml") { manifest = parse_toml(package_git(repo, ["show", commit + ":kennel.toml"]))
@@ -186,7 +221,7 @@ export func package_build(repo, commit, release, policy, workflow, base) {
     mut archive := package_archive(files); mut digest := sha256(archive); mut prefix := base + "/packages/" + name + "/" + version
     mut provenance := {"schema_version": 1, "package": name, "version": version, "source_commit": commit, "source_tag": tag, "repository": repository, "repository_id": release["repository_id"], "release_id": release["id"], "released_at": release["published_at"], "published_at": workflow["published_at"], "workflow_run": workflow["run"], "workflow_ref": workflow["ref"], "workflow_sha": workflow["sha"], "archive_sha256": digest, "builder": "kennel-kujo-ustar-gzip-v1"}
     if legacy != null { provenance["legacy_packaging"] = {"source_manifest": legacy["source_manifest"], "source_package": legacy["source_package"], "generated_file": "kennel.toml", "generated_file_sha256": sha256(synthetic)} }
-    if projection != null { provenance["manifest_projection"] = {"source_manifest": dict_get_or(projection, "source_manifest", null), "source_manifest_sha256": projection["source_manifest_sha256"], "generated_file": "kennel.toml", "generated_file_sha256": sha256(synthetic), "dependency_releases": dict_get_or(projection, "dependency_releases", {})} }
+    if projection != null { provenance["manifest_projection"] = {"source_manifest": dict_get_or(projection, "source_manifest", null), "source_manifest_sha256": projection["source_manifest_sha256"], "generated_file": "kennel.toml", "generated_file_sha256": sha256(synthetic), "dependency_releases": dict_get_or(projection, "dependency_releases", {})}; if has_key(projection, "dependency_git_pins") { mut recorded := provenance["manifest_projection"]; recorded["dependency_git_pins"] = projection["dependency_git_pins"]; provenance["manifest_projection"] = recorded } }
     mut provenance_bytes := package_bytes(package_json(provenance))
     mut metadata := {"schema_version": 1, "package": name, "version": version, "scope": null, "owner": {"type": "organization", "id": "kujolang"}, "official": true, "description": dict_get_or(pkg, "description", ""), "license": dict_get_or(pkg, "license", ""), "released_at": release["published_at"], "source_commit": commit, "source_tag": tag, "archive_url": prefix + "/package.tar.gz", "archive_sha256": digest, "archive_size": len(archive), "file_count": len(keys(files)), "provenance_url": prefix + "/provenance.json", "provenance_sha256": sha256(provenance_bytes), "checksum_url": prefix + "/checksums.txt", "dependencies": dict_get_or(manifest, "dependencies", {}), "minimum_kujo_version": dict_get_or(controls, "minimum_version", ""), "repository": repository, "repository_id": release["repository_id"], "release_id": release["id"]}
     return {"metadata": metadata, "artifacts": {"package.tar.gz": archive, "manifest.json": package_bytes(package_json(metadata)), "provenance.json": provenance_bytes, "checksums.txt": package_bytes(digest + "  package.tar.gz\n" + sha256(provenance_bytes) + "  provenance.json\n")}}

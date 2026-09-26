@@ -128,6 +128,42 @@ class RegistryTests(unittest.TestCase):
         self.policy['packages']['fixture']['release_manifests']={self.commit:projection}
         with self.assertRaisesRegex(ValueError,'does not match release source'):self.build()
 
+    def test_reviewed_git_pins_preserve_commit_and_tag_identity(self):
+        commit='a'*40
+        approved={'repository':'kujolang/dep','official':True,'enabled':True}
+        def check(ref, remote='', target_commit=commit, source='github:kujolang/dep', extra=None):
+            declared={'source':source,'ref':ref,**(extra or {})}
+            target={'original':declared,'package':'dep','commit':target_commit}
+            body='from src.registry_package import package_git_dependency_pin\n'
+            body+='print(to_json(package_git_dependency_pin('+','.join(json.dumps(x) for x in [declared,target,approved,remote])+')))\n'
+            return self.kujo(body)
+        for ref, remote in [(commit,''),('v1.1.0',commit+'\trefs/tags/v1.1.0'),('v1.1.0','b'*40+'\trefs/tags/v1.1.0\n'+commit+'\trefs/tags/v1.1.0^{}')]:
+            result=check(ref,remote)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            self.assertEqual(json.loads(result.stdout),{'source':'github:kujolang/dep','commit':commit})
+        for kwargs in [dict(ref=commit,target_commit='b'*40),dict(ref='main'),dict(ref='v1.1.0'),dict(ref='v1.1.0',remote='b'*40+'\trefs/tags/v1.1.0'),dict(ref=commit,source='github:other/dep'),dict(ref=commit,extra={'version':'1.0.0'}),dict(ref=commit,target_commit='bad')]:
+            result=check(**kwargs)
+            self.assertNotEqual(result.returncode,0,result.stdout)
+
+    def test_git_commit_projection_records_provenance_without_released_dependency(self):
+        dependency={'source':'github:kujolang/dep','ref':'a'*40}
+        with (self.repo/'kennel.toml').open('a') as f:
+            f.write('dep = { source = "github:kujolang/dep", ref = "'+ 'a'*40 +'" }\n')
+        self.git('add','kennel.toml');self.git('commit','-qm','exact Git dependency');self.git('tag','-f','v1.0.0')
+        self.commit=self.git('rev-parse','HEAD').strip()
+        source=self.git('show',self.commit+':kennel.toml').encode()
+        target={'original':dependency,'package':'dep','commit':'a'*40}
+        projection={'source_manifest':'kennel.toml','source_manifest_sha256':digest(source),'source_package':'fixture','description':'fixture','entry':'main.kujo','dependency_git_pins':{'dep':target}}
+        self.policy['packages']['fixture']['release_manifests']={self.commit:projection}
+        self.policy['packages']['dep']={'repository':'kujolang/dep','repository_id':3,'official':True,'enabled':True}
+        m,a=self.build()
+        self.assertEqual(m['dependencies']['dep'],{'source':'github:kujolang/dep','commit':'a'*40})
+        self.assertEqual(json.loads(a['provenance.json'])['manifest_projection']['dependency_git_pins']['dep'],target)
+        with tarfile.open(fileobj=io.BytesIO(a['package.tar.gz']),mode='r:gz') as t:
+            self.assertEqual(t.extractfile('main.kujo').read(),b'print("fixture")\n')
+        target['original']['ref']='b'*40
+        with self.assertRaisesRegex(ValueError,'reviewed source'):self.build()
+
     def test_prerelease_precedence_is_numeric(self):
         result=self.kujo('from src.registry_site import site_compare\nassert_equal(site_compare("1.0.0-rc.10", "1.0.0-rc.9"), 1)\nassert_equal(site_compare("1.0.0", "1.0.0-rc.10"), 1)\n')
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
