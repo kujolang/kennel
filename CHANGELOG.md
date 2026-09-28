@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — registry source preservation
+
+- Exclude generated root `artifacts/` without deleting legitimate source modules such as `src/agents/artifacts/store.kujo`. Secret, symlink and immutable-version checks remain unchanged. Existing published archives are never rewritten.
+
 ## [1.1.0] - 2026-09-13
 
 - Official HTTPS package distribution, verified immutable archives, provenance consistency checks and content-addressed cache.

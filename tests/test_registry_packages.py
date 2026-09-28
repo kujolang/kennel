@@ -50,6 +50,20 @@ class RegistryTests(unittest.TestCase):
         with tarfile.open(fileobj=io.BytesIO(a['package.tar.gz']),mode='r:gz') as t:
             self.assertEqual(t.getnames(),['kennel.toml','main.kujo'])
         self.assertEqual(self.extract(a['package.tar.gz']).returncode,0)
+    def test_source_artifact_module_survives_generated_artifact_filter(self):
+        for name in ['src/agents/artifacts/store.kujo', 'artifacts/private.log', 'src/agents/artifacts/.env']:
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('export func marker() { return 1 }\n')
+        self.git('add', '.'); self.git('commit', '-qm', 'source module and generated output')
+        self.git('tag', '-f', 'v1.0.0')
+        self.commit = self.git('rev-parse', 'HEAD').strip()
+        _, artifacts = self.build()
+        with tarfile.open(fileobj=io.BytesIO(artifacts['package.tar.gz']), mode='r:gz') as archive:
+            self.assertIn('src/agents/artifacts/store.kujo', archive.getnames())
+            self.assertNotIn('artifacts/private.log', archive.getnames())
+            self.assertNotIn('src/agents/artifacts/.env', archive.getnames())
+
     def test_immutable_retry_and_mutation(self):
         m,a=self.build();root=self.root/'registry';self.assertTrue(publish(root,m,a));self.assertFalse(publish(root,m,a));generate(root)
         changed=dict(m,archive_sha256='0'*64)

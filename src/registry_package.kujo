@@ -188,9 +188,9 @@ export func package_build(repo, commit, release, policy, workflow, base) {
         for record in split(package_git(repo, ["ls-tree", "-rz", "--full-tree", commit]), decode_charset(bytes([0]), "utf-8", 1)) {
             if record == "" { continue }
             mut pair := split(record, "\t"); if len(pair) != 2 { throw("Unsafe Git path") }
-            mut header := split(pair[0], " "); mut path := pair[1]; mut deny := false
+            mut header := split(pair[0], " "); mut path := pair[1]; mut deny := path == "artifacts" || starts_with(path, "artifacts/")
             for part in split(path, "/") {
-                if global_contains([".git", ".env", ".kennel_tmp", ".kennel", "kennel_packages", "node_modules", "target", "dist", "build", "__pycache__", ".DS_Store", ".idea", ".vscode", ".cache", "artifacts"], part) || starts_with(part, ".env.") { deny = true }
+                if global_contains([".git", ".env", ".kennel_tmp", ".kennel", "kennel_packages", "node_modules", "target", "dist", "build", "__pycache__", ".DS_Store", ".idea", ".vscode", ".cache"], part) || starts_with(part, ".env.") { deny = true }
                 for suffix in [".pem", ".key", ".p12", ".pyc", ".swp", "~"] { if ends_with(part, suffix) { deny = true } }
             }
             if deny || package_matches(path, include) == false || package_matches(path, exclude) { continue }
