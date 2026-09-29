@@ -47,6 +47,9 @@ required_patterns=(
 	"bash ./scripts/verify-benchmark-harness.sh"
 	"- security"
 	"- full"
+	"Install released runtime for current companion packages"
+	"version: v1.6.0"
+	'KUJO_BIN: ${{ steps.production-runtime.outputs.kujo-path }}'
 	"Verify anonymous production installs"
 	"scripts/registry/production_e2e.kujo"
 	"scripts/registry/global_tools_production_e2e.kujo"

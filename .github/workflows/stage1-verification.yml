@@ -192,10 +192,17 @@ jobs:
           set -euo pipefail
           bash ./scripts/verify-profiles.sh "${{ matrix.profile }}"
 
+      - name: Install released runtime for current companion packages
+        if: matrix.profile == 'full'
+        id: production-runtime
+        uses: kujolang/kujo/.github/actions/setup-kujo@fc53093f35e4236682bbbf5ab1ccc8d2b4df990c
+        with:
+          version: v1.6.0
+
       - name: Verify anonymous production installs
         if: matrix.profile == 'full'
         env:
-          KUJO_BIN: ${{ github.workspace }}/kujo-bin/kujo
+          KUJO_BIN: ${{ steps.production-runtime.outputs.kujo-path }}
           KUJO_MODULE_PATH: ${{ github.workspace }}
         run: |
           set -euo pipefail
