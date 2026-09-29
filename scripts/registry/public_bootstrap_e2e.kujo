@@ -3,7 +3,7 @@ from src.global_common import global_delete, global_runtime
 from src.registry_transport import registry_get, registry_json
 from src.utils import ensure_dir
 runtime := global_runtime()
-version := env_or("KENNEL_EXPECTED_VERSION", "1.1.0")
+version := env_or("KENNEL_EXPECTED_VERSION", "1.1.1")
 folder := create_temp_dir(path_absolute("/tmp"), "kennel-public-acceptance-")
 home := folder + "/home"; ensure_dir(home)
 base := home + "/.kennel"

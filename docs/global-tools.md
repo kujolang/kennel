@@ -1,6 +1,6 @@
 # Global tools and the Kennel installer
 
-Version: 1.1.0. The latest historical release remains immutable. macOS and Linux are supported; Windows users need a Linux environment such as WSL. A compatible Kujo runtime is required. Kennel’s installer, command activation, self-update and release publisher are Kujo-native. Python is not an installation or publishing dependency. The existing resolver, checksums, provenance, extraction, cache and lockfiles are reused. There is no second package resolver or package execution hook.
+Version: 1.1.1. Previously published releases remain immutable. macOS and Linux are supported; Windows users need a Linux environment such as WSL. A compatible Kujo runtime is required. Kennel’s installer, command activation, self-update and release publisher are Kujo-native. Python is not an installation or publishing dependency. The existing resolver, checksums, provenance, extraction, cache and lockfiles are reused. There is no second package resolver or package execution hook.
 
 ## Review before release
 

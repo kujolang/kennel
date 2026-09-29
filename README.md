@@ -1,6 +1,6 @@
 # Kennel
 
-[![Version](https://img.shields.io/badge/version-1.1.0-black)](https://github.com/kujolang/kennel)
+[![Version](https://img.shields.io/badge/version-1.1.1-black)](https://github.com/kujolang/kennel)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
 
@@ -13,7 +13,7 @@ Official first-party distribution is available through the versioned HTTPS proto
 **Runtime prerequisite:** install [Kujo 1.4.0](https://github.com/kujolang/kujo/releases/tag/v1.4.0) or newer. It provides isolated imports and the native package primitives required by Kennel. The installer rejects incompatible runtimes.
 
 
-Kennel **1.1.0** adds global commands and a per-user installer for macOS/Linux. To install from a reviewed source checkout, Git is required:
+Kennel **1.1.1** provides global commands and a per-user installer for macOS/Linux. To install from a reviewed source checkout, Git is required:
 
 ```bash
 "${KUJO_BIN:-kujo}" run scripts/install.kujo --interpreter -- --source .
@@ -49,6 +49,8 @@ The CLI form is also available as `kujo run /path/to/kennel/kennel.kujo --interp
 The built-in registry is used when no explicit registry or project `index.json` exists. Set `[registry].index = "https://your-registry.example/api/v1/index.json"` to override it. Existing file/Git dependencies, local static indexes and local hosted auth/publish commands retain their behavior. Official names are unscoped; future third-party identities use `@scope/name`, with publishing still unavailable.
 
 Read [the protocol and trust contract](docs/registry/protocol.md), [audit and implementation spec](docs/registry/audit-and-spec.md), and [publisher runbook](docs/registry/publishing.md). The historical Changebucket 1.0.0 release contains the original ChangeBudget CLI; backfill preserves released code.
+
+Release 1.1.1 fixes binary-safe bootstrap downloads, preserves installer module boundaries, and preserves reviewed Git dependencies and legitimate source modules in registry packages. It is verified with Kujo 1.6.0; the minimum runtime remains 1.4.0. Previously published package bytes remain immutable.
 
 ## Why Teams Use Kennel
 

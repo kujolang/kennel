@@ -27,7 +27,7 @@ try {
     check(setup, 0, settings, folder)
     assert_equal(read_file(user + "/.zshrc"), before)
     launcher := base + "/bin/kennel"
-    assert_equal(trim(check([launcher, "--version"], 0, settings, folder)), "Kennel 1.1.0")
+    assert_equal(trim(check([launcher, "--version"], 0, settings, folder)), "Kennel 1.1.1")
     source := folder + "/global-demo"; ensure_dir(source)
     manifest := "[package]\nname=\"global-demo\"\nversion=\"1.0.0\"\n[bin]\nglobal-demo=\"main.kujo\"\nglobal-exit=\"exit.kujo\"\n"
     write_file(source + "/kennel.toml", manifest)

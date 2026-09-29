@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased — registry source preservation
+## [Unreleased]
+
+## [1.1.1] - 2026-09-29
+
+- Write verified bootstrap archives as bytes and preserve module boundaries in the standalone installer.
+- Preserve exact reviewed Git dependency identities and global command metadata in published registry packages.
+- Keep versioned package routes intact through Cloudflare and reconcile public runtime guidance with Kujo 1.6.0.
+- Align client version metadata and verify the release against Kujo 1.6.0 while retaining the 1.4.0 minimum.
+
 
 - Exclude generated root `artifacts/` without deleting legitimate source modules such as `src/agents/artifacts/store.kujo`. Secret, symlink and immutable-version checks remain unchanged. Existing published archives are never rewritten.
 
