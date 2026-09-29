@@ -1,0 +1,28 @@
+name: Kujo 1.6 release verification
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: kujolang/kujo/.github/actions/setup-kujo@fc53093f35e4236682bbbf5ab1ccc8d2b4df990c
+        id: runtime
+        with:
+          version: v1.6.0
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Full canonical gate on released runtime
+        env:
+          KUJO_BIN: ${{ steps.runtime.outputs.kujo-path }}
+          VERIFY_SHELLCHECK_REQUIRED: '1'
+          AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          MCP_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_AI_SDK_DIR: ${{ github.workspace }}/examples/basic-project
+          LOCAL_SOURCE_DIR: ${{ github.workspace }}/examples/basic-project
+        run: bash scripts/verify-all.sh
