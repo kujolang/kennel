@@ -1,0 +1,23 @@
+{
+  "project": {
+    "name": "Kennel",
+    "tagline": "Official Kujo packages",
+    "url": "kennel.kujolang.ai"
+  },
+  "theme": {
+    "name": "minimal",
+    "mode": "light"
+  },
+  "cards": [
+    {
+      "id": "agent-city",
+      "title": "Agent City",
+      "tagline": "Local agent tasks, review, and replay.",
+      "file": "site/agent-city-example.kujo",
+      "variant": "social",
+      "label": "separate application installer",
+      "url": "https://kennel.kujolang.ai/getting-started/#agent-city",
+      "notes": "Source example from Agent City v0.2.0 release-notes task; Howl displays source without running it."
+    }
+  ]
+}
