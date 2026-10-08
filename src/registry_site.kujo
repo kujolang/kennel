@@ -8,7 +8,9 @@ from src.registry_package import package_json
 export func site_escape(value) { return replace(replace(replace(replace(replace(to_string(value), "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;"), "'", "&#x27;") }
 func site_page(source, title, content, route, description) {
     mut template := read_file(source + "/scripts/registry/site/page.html")
-    mut fields := {"title": site_escape(title), "description": site_escape(description), "path": site_escape(route), "content": content}
+    mut canonical_route := route
+    if canonical_route != "" && !ends_with(canonical_route, "/") { canonical_route = canonical_route + "/" }
+    mut fields := {"title": site_escape(title), "description": site_escape(description), "path": site_escape(canonical_route), "content": content}
     mut output := ""; mut pieces := split(template, "{{"); output = pieces[0]
     for piece in slice(pieces, 1, len(pieces)) {
         mut end := index_of(piece, "}}")
