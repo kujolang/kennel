@@ -1,4 +1,4 @@
-from src.utils import insert_sorted_by_name, write_text_atomic
+from src.utils import dict_get_or, insert_sorted_by_name, write_text_atomic
 
 LOCKFILE_FILENAME := "kennel.lock"
 LOCKFILE_VERSION := 1
@@ -29,12 +29,8 @@ func load_lockfile(cwd) {
 	raw := read_file(path)
 	try {
 		parsed := parse_toml(raw)
-		if has_key(parsed, "package") == false {
-			parsed["package"] := []
-		}
-		if has_key(parsed, "version") == false {
-			parsed["version"] := LOCKFILE_VERSION
-		}
+		parsed["package"] = dict_get_or(parsed, "package", [])
+		parsed["version"] = dict_get_or(parsed, "version", LOCKFILE_VERSION)
 		return {
 			"ok": true,
 			"lockfile": parsed,
@@ -71,13 +67,9 @@ func set_packages(lockfile_obj, packages) {
 }
 
 func packages(lockfile_obj) {
-	if has_key(lockfile_obj, "package") == false {
-		return []
-	}
-	if type(lockfile_obj["package"]) != "array" {
-		return []
-	}
-	return lockfile_obj["package"]
+	entries := dict_get_or(lockfile_obj, "package", [])
+	if type(entries) != "array" { return [] }
+	return entries
 }
 
 func find_package(lockfile_obj, package_name) {

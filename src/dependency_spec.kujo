@@ -88,7 +88,7 @@ func parse_github_url_source(raw_source) {
 	}
 }
 
-func parse_local_source(raw_source) {
+func parse_local_source(raw_source, inspect_local) {
 	path_value := raw_source
 	if starts_with(raw_source, "file:") {
 		path_value := substring(raw_source, len("file:"), len(raw_source))
@@ -99,6 +99,9 @@ func parse_local_source(raw_source) {
 			"ok": false,
 			"error": "Local package path cannot be empty"
 		}
+	}
+	if inspect_local == false {
+		return {"ok": true, "kind": "path", "source": "file:" + path_value, "path": path_value, "name": path_basename(path_value), "requested": "", "requested_kind": "none", "declaration_only": true}
 	}
 	abs := path_absolute(path_value)
 	if path_exists(abs) == false {
@@ -125,7 +128,7 @@ func parse_local_source(raw_source) {
 	}
 }
 
-func parse_source_reference(raw_source) {
+func parse_source_reference_mode(raw_source, inspect_local) {
 	source := trim(raw_source)
 	if source == "" {
 		return {
@@ -143,10 +146,10 @@ func parse_source_reference(raw_source) {
 		return parse_github_url_source(source)
 	}
 	if starts_with(source, "file:") {
-		return parse_local_source(source)
+		return parse_local_source(source, inspect_local)
 	}
 	if starts_with(source, "./") || starts_with(source, "../") || starts_with(source, "/") {
-		return parse_local_source(source)
+		return parse_local_source(source, inspect_local)
 	}
 	return {
 		"ok": false,
@@ -154,7 +157,7 @@ func parse_source_reference(raw_source) {
 	}
 }
 
-func source_ref_from_dependency_entry(name, dep_entry) {
+func source_ref_from_dependency_entry_mode(name, dep_entry, inspect_local) {
 	if type(dep_entry) != "dict" {
 		return {
 			"ok": false,
@@ -193,7 +196,7 @@ func source_ref_from_dependency_entry(name, dep_entry) {
 			}
 		}
 		path_value := trim_or(dep_entry["path"], "")
-		parsed := parse_local_source(path_value)
+		parsed := parse_local_source(path_value, inspect_local)
 		if parsed["ok"] == false {
 			return parsed
 		}
@@ -210,7 +213,7 @@ func source_ref_from_dependency_entry(name, dep_entry) {
 	}
 	if has_key(dep_entry, "source") {
 		source_value := trim_or(dep_entry["source"], "")
-		parsed := parse_source_reference(source_value)
+		parsed := parse_source_reference_mode(source_value, inspect_local)
 		if parsed["ok"] == false {
 			return parsed
 		}
@@ -244,7 +247,7 @@ func source_ref_from_dependency_entry(name, dep_entry) {
 	}
 	if has_key(dep_entry, "git") {
 		git_value := trim_or(dep_entry["git"], "")
-		parsed := parse_source_reference(git_value)
+		parsed := parse_source_reference_mode(git_value, inspect_local)
 		if parsed["ok"] == false {
 			return parsed
 		}
@@ -282,6 +285,12 @@ func source_ref_from_dependency_entry(name, dep_entry) {
 		"error": "Dependency `" + name + "` is missing source/git/path"
 	}
 }
+
+// Declaration parsing deliberately skips filesystem availability and normalization.
+// Existing installer entry points retain their path inspection behavior.
+func parse_source_reference(raw_source) { return parse_source_reference_mode(raw_source, true) }
+func source_ref_from_dependency_entry(name, dep_entry) { return source_ref_from_dependency_entry_mode(name, dep_entry, true) }
+func source_ref_from_dependency_declaration(name, dep_entry) { return source_ref_from_dependency_entry_mode(name, dep_entry, false) }
 
 func dependency_entry_from_source(parsed, alias_name) {
 	entry := {}
@@ -345,3 +354,5 @@ func dependency_entry_from_source(parsed, alias_name) {
 export parse_source_reference := parse_source_reference
 export source_ref_from_dependency_entry := source_ref_from_dependency_entry
 export dependency_entry_from_source := dependency_entry_from_source
+
+export source_ref_from_dependency_declaration := source_ref_from_dependency_declaration

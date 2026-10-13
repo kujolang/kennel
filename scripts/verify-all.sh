@@ -10,6 +10,8 @@ run_script() {
 	bash "$script_path"
 }
 
+run_script "$ROOT_DIR/scripts/verify-declaration-inspection.sh"
+
 if [[ "$MODE" == "core" ]]; then
 	run_script "$ROOT_DIR/scripts/verify-atomic-persistence.sh"
 	run_script "$ROOT_DIR/scripts/verify-cli-messages.sh"

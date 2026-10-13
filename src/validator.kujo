@@ -1,4 +1,4 @@
-from dependency_spec import source_ref_from_dependency_entry
+from dependency_spec import source_ref_from_dependency_entry, source_ref_from_dependency_declaration
 from manifest import dependency_map, manifest_package_name, manifest_package_version
 
 func print_issues(prefix, issues) {
@@ -7,7 +7,7 @@ func print_issues(prefix, issues) {
 	}
 }
 
-func validate_manifest(manifest_obj) {
+func validate_manifest_mode(manifest_obj, declaration_only) {
 	errors := []
 	warnings := []
 	name := trim(to_string(manifest_package_name(manifest_obj)))
@@ -20,7 +20,9 @@ func validate_manifest(manifest_obj) {
 	}
 	deps := dependency_map(manifest_obj)
 	for dep_name in keys(deps) {
-		parsed := source_ref_from_dependency_entry(dep_name, deps[dep_name])
+		parsed := {}
+		if declaration_only { parsed = source_ref_from_dependency_declaration(dep_name, deps[dep_name]) }
+		else { parsed = source_ref_from_dependency_entry(dep_name, deps[dep_name]) }
 		if parsed["ok"] == false {
 			errors := push(errors, parsed["error"])
 			continue
@@ -39,6 +41,9 @@ func validate_manifest(manifest_obj) {
 	}
 }
 
+func validate_manifest(manifest_obj) { return validate_manifest_mode(manifest_obj, false) }
+func validate_manifest_declarations(manifest_obj) { return validate_manifest_mode(manifest_obj, true) }
+
 func print_validation_report(report) {
 	if report["ok"] {
 		print("kennel.toml is valid")
@@ -51,3 +56,5 @@ func print_validation_report(report) {
 
 export validate_manifest := validate_manifest
 export print_validation_report := print_validation_report
+
+export validate_manifest_declarations := validate_manifest_declarations

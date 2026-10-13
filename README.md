@@ -131,6 +131,18 @@ kujo run kennel.kujo --interpreter -- install
 kujo run kennel.kujo --interpreter -- validate
 ```
 
+## Declaration-only inspection (unreleased)
+
+Source integrations can import `validate_manifest_declarations` from `validator`
+and `source_ref_from_dependency_declaration` from `dependency_spec`. Run these
+with the interpreter, as with the existing CLI. They reuse Kennel's dependency
+syntax/selector checks but do not resolve, normalize, stat or open local paths.
+Returned local paths remain declarations and carry `declaration_only: true`.
+They do not verify installed packages, lockfile integrity, trust policy or remote
+availability. Existing `validate_manifest`, `kennel validate`, add and install
+paths retain their filesystem checks. This source API is not yet in the released
+1.1.1 client.
+
 ## Trust Policy Configuration
 
 ```toml

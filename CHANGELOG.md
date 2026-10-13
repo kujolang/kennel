@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Add opt-in declaration-only manifest/dependency inspection for host integrations without checking local dependency paths. Existing install checks remain active.
+- Preserve empty dependency/package defaults when optional manifest or lockfile fields are omitted.
+
 ## [1.1.1] - 2026-09-29
 
 - Write verified bootstrap archives as bytes and preserve module boundaries in the standalone installer.

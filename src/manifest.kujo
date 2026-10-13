@@ -180,10 +180,7 @@ func ensure_manifest_shape(manifest_obj) {
 }
 
 func dependency_map(manifest_obj) {
-	if has_key(manifest_obj, "dependencies") == false {
-		return {}
-	}
-	deps := manifest_obj["dependencies"]
+	deps := dict_get_or(manifest_obj, "dependencies", {})
 	if type(deps) != "dict" {
 		return {}
 	}

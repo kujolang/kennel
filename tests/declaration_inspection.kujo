@@ -1,0 +1,38 @@
+from dependency_spec import source_ref_from_dependency_declaration, source_ref_from_dependency_entry
+from validator import validate_manifest_declarations, validate_manifest
+from manifest import default_manifest
+from lockfile import packages, load_lockfile
+
+assert(validate_manifest_declarations({"package": {"name": "empty", "version": "1.0.0"}})["ok"], "Missing dependency section must be empty")
+assert(len(packages({})) == 0, "Missing package entries must be empty")
+create_dir(".kennel_tmp/declaration-contract")
+write_file(".kennel_tmp/declaration-contract/kennel.lock", "generated_by=\"fixture\"\n", true)
+loaded := load_lockfile(".kennel_tmp/declaration-contract")
+assert(loaded["ok"], to_json(loaded))
+lock := loaded["lockfile"]
+assert(lock["version"] == 1 && len(lock["package"]) == 0, "Absent lock defaults were not preserved")
+
+missing := "../kennel-declaration-does-not-exist-771940"
+for entry in [{"path": missing}, {"source": "file:" + missing}, {"source": missing}, {"git": "file:" + missing}] {
+ parsed := source_ref_from_dependency_declaration("local", entry)
+ assert(parsed["ok"], to_json(parsed))
+ assert(parsed["declaration_only"], "Local declaration was resolved")
+ assert(parsed["path"] == missing, "Declared relative path changed")
+}
+for entry in [{"path": ""}, {"path": missing, "tag": "v1"}, {"source": "github:owner/repo", "git": "github:owner/repo"}, {"source": "unsupported:value"}, {"source": "github:owner/repo", "tag": "v1", "commit": "abc"}] {
+ assert(source_ref_from_dependency_declaration("invalid", entry)["ok"] == false, "Invalid declaration was accepted")
+}
+for entry in [{"source": "github:owner/repo@v1.0.0"}, {"git": "https://github.com/owner/repo.git#main"}, {"source": "registry:https://example.invalid/index.json", "version": "1.0.0"}] {
+ assert(to_json(source_ref_from_dependency_declaration("remote", entry)) == to_json(source_ref_from_dependency_entry("remote", entry)), "Nonlocal declaration changed parser semantics")
+}
+manifest := default_manifest("inspection")
+manifest["dependencies"] = {"local": {"path": missing}, "remote": {"source": "github:owner/repo"}}
+report := validate_manifest_declarations(manifest)
+assert(report["ok"], to_json(report))
+assert(len(report["warnings"]) == 1, "Unpinned remote warning was lost")
+failed := false
+try { result := validate_manifest(manifest); failed = result["ok"] == false } except err { failed = true }
+assert(failed, "Default validation stopped checking local paths")
+pkg := manifest["package"]; pkg["name"] = ""; manifest["package"] = pkg
+assert(validate_manifest_declarations(manifest)["ok"] == false, "Missing name was accepted")
+print("Declaration inspection assertions passed")
