@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [1.2.0] - 2026-10-14
+
+- Emit canonical registry directory URLs while preserving immutable historical packages.
 
 - Add opt-in declaration-only manifest/dependency inspection for host integrations without checking local dependency paths. Existing install checks remain active.
 - Preserve empty dependency/package defaults when optional manifest or lockfile fields are omitted.
