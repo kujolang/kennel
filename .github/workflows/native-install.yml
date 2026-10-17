@@ -1,7 +1,7 @@
 name: Native dependency installation
 on:
   push:
-    branches: [main]
+    branches: [main, codex/native-installer-tools]
   pull_request:
 permissions:
   contents: read
