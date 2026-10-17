@@ -173,6 +173,16 @@ func remove_path(path) {
 	return false
 }
 
+# Git's command-line parser does not accept Windows verbatim prefixes.
+# Keep canonical filesystem paths elsewhere; adapt only Git path arguments.
+func git_path_argument(path) {
+    if path_join("a", "b") == "a\\b" {
+        if starts_with(path, "\\\\?\\UNC\\") { return "\\\\" + substring(path, 8, len(path)) }
+        if starts_with(path, "\\\\?\\") { return substring(path, 4, len(path)) }
+    }
+    return path
+}
+
 func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
 	if is_safe_install_path(install_path) == false {
 		return {
@@ -187,22 +197,22 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
 			"error": "Failed to clear existing install directory: " + install_path
 		}
 	}
-	clone_cmd := ["git", "clone", url, install_path]
+	clone_cmd := ["git", "clone", "--config", "core.longpaths=true", url, git_path_argument(install_path)]
 	if resolved_ref != "" && resolved_ref != "HEAD" && resolved_commit == "" {
-		clone_cmd := ["git", "clone", "--depth", "1", "--branch", resolved_ref, url, install_path]
+		clone_cmd := ["git", "clone", "--config", "core.longpaths=true", "--depth", "1", "--branch", resolved_ref, url, git_path_argument(install_path)]
 	}
 	clone_result := spawn_process(clone_cmd, {"timeout_ms": 240000, "max_output_bytes": 8388608})
 	if command_ok(clone_result) == false {
 		return replacement_failure(install_path, displacement, "Failed to clone " + url + ": " + trim(clone_result.stderr))
 	}
 	if resolved_commit != "" {
-		checkout_cmd := ["git", "-C", install_path, "checkout", resolved_commit]
+		checkout_cmd := ["git", "-C", git_path_argument(install_path), "checkout", resolved_commit]
 		checkout_result := spawn_process(checkout_cmd, {"timeout_ms": 240000, "max_output_bytes": 8388608})
 		if command_ok(checkout_result) == false {
 			return replacement_failure(install_path, displacement, "Failed to checkout commit " + resolved_commit + ": " + trim(checkout_result.stderr))
 		}
 	}
-	rev_parse := spawn_process(["git", "-C", install_path, "rev-parse", "HEAD"], {"timeout_ms": 30000, "max_output_bytes": 8388608})
+	rev_parse := spawn_process(["git", "-C", git_path_argument(install_path), "rev-parse", "HEAD"], {"timeout_ms": 30000, "max_output_bytes": 8388608})
 	if command_ok(rev_parse) == false {
 		return replacement_failure(install_path, displacement, "Failed to read resolved commit for " + url)
 	}
@@ -232,7 +242,7 @@ func copy_local_package(path, install_path) {
 	}
 	parent_dir := parent_dir_path(install_path)
 	ensure_dir(parent_dir)
-	git_clone := spawn_process(["git", "clone", path, install_path], {"timeout_ms": 240000, "max_output_bytes": 8388608})
+	git_clone := spawn_process(["git", "clone", "--config", "core.longpaths=true", git_path_argument(path), git_path_argument(install_path)], {"timeout_ms": 240000, "max_output_bytes": 8388608})
 	if command_ok(git_clone) == false {
 		copy_cmd := "mkdir -p " + shell_quote(install_path) + " && cp -R " + shell_quote(path + "/.") + " " + shell_quote(install_path + "/")
 		result := run_shell(copy_cmd)
