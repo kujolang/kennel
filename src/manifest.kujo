@@ -71,7 +71,7 @@ func infer_project_name(cwd) {
 }
 
 func manifest_path(cwd) {
-	return cwd + "/" + MANIFEST_FILENAME
+	return path_join(cwd, MANIFEST_FILENAME)
 }
 
 func load_manifest(cwd) {
