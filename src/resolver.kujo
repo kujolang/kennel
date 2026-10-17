@@ -4,8 +4,8 @@ from src.utils import command_ok, dict_get_or, run_shell, shell_quote
 from src.semver import parse_semver_value, compare_semver, semver_satisfies_range
 
 func git_ls_remote_tags(url) {
-	cmd := "git ls-remote --tags --refs " + shell_quote(url)
-	result := run_shell(cmd)
+	cmd := ["git", "ls-remote", "--tags", "--refs", url]
+	result := spawn_process(cmd, {"timeout_ms": 240000, "max_output_bytes": 8388608})
 	if command_ok(result) == false {
 		return {
 			"ok": false,
@@ -95,8 +95,8 @@ func git_ls_remote(url, ref_name) {
 	if selector == "" {
 		selector := "HEAD"
 	}
-	cmd := "git ls-remote " + shell_quote(url) + " " + shell_quote(selector)
-	result := run_shell(cmd)
+	cmd := ["git", "ls-remote", url, selector]
+	result := spawn_process(cmd, {"timeout_ms": 240000, "max_output_bytes": 8388608})
 	if command_ok(result) == false {
 		return {
 			"ok": false,

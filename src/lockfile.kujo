@@ -4,7 +4,7 @@ LOCKFILE_FILENAME := "kennel.lock"
 LOCKFILE_VERSION := 1
 
 func lockfile_path(cwd) {
-	return cwd + "/" + LOCKFILE_FILENAME
+	return path_join(cwd, LOCKFILE_FILENAME)
 }
 
 func empty_lockfile() {

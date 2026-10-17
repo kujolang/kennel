@@ -295,7 +295,7 @@ func resolve_registry_request_context(cwd, parsed_cli, require_auth) {
 	if raw_store_path != "" {
 		resolved_store_path := raw_store_path
 		if starts_with(raw_store_path, "/") == false {
-			resolved_store_path := path_absolute(cwd + "/" + raw_store_path)
+			resolved_store_path := path_absolute(path_join(cwd, raw_store_path))
 		}
 		token_payload["store_path"] := resolved_store_path
 	}
@@ -311,7 +311,7 @@ func resolve_registry_request_context(cwd, parsed_cli, require_auth) {
 	raw_registry_dir := trim(to_string(flag_value(parsed_cli, "--registry-dir", ".kennel_registry")))
 	registry_dir := raw_registry_dir
 	if starts_with(raw_registry_dir, "/") == false {
-		registry_dir := path_absolute(cwd + "/" + raw_registry_dir)
+		registry_dir := path_absolute(path_join(cwd, raw_registry_dir))
 	}
 	user_context := ""
 	if token_lookup["ok"] {
@@ -378,7 +378,7 @@ func index_lookup_paths(cwd, manifest_obj) {
 		}
 	}
 	if len(configured) == 0 {
-		default_index := cwd + "/index.json"
+		default_index := path_join(cwd, "index.json")
 		if file_exists(default_index) {
 			return {
 				"ok": true,
@@ -401,7 +401,7 @@ func index_lookup_paths(cwd, manifest_obj) {
 		}
 		resolved_path := configured_index
 		if starts_with(configured_index, "/") == false {
-			resolved_path = path_absolute(cwd + "/" + configured_index)
+			resolved_path = path_absolute(path_join(cwd, configured_index))
 		}
 		if file_exists(resolved_path) == false {
 			warnings = push(warnings, "Skipping missing static index file: " + resolved_path)
@@ -481,7 +481,7 @@ func resolve_metadata_file_path(cwd, index_path, metadata_path) {
 		}
 	}
 	index_dir := parent_dir_path(index_path)
-	from_index := path_absolute(index_dir + "/" + raw_metadata)
+	from_index := path_absolute(path_join(index_dir, raw_metadata))
 	index_root := path_absolute(index_dir)
 	if starts_with(from_index, index_root + "/") == false {
 		return error_result("Invalid metadata_path: resolved path escapes the static index directory.", {
@@ -781,7 +781,7 @@ func read_login_token_from_file(cwd, token_file_input) {
 		})
 	}
 	if starts_with(resolved_path, "/") == false {
-		resolved_path := path_absolute(cwd + "/" + resolved_path)
+		resolved_path := path_absolute(path_join(cwd, resolved_path))
 	}
 	if file_exists(resolved_path) == false {
 		return error_result("Token file was not found: " + resolved_path, {

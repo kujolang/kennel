@@ -1,0 +1,26 @@
+name: Native dependency installation
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+      - name: Install runtime and verify native project installation
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/kennel-runtime" --ignore-scripts @kujolang/kujo-runtime@1.8.1
+          export KUJO_BIN=$(node -e "console.log(require(process.argv[1]).getKujoRuntimeInfo().binaryPath)" "$RUNNER_TEMP/kennel-runtime/node_modules/@kujolang/kujo-runtime")
+          node --test tests/native-install.test.mjs
