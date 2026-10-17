@@ -1,7 +1,7 @@
 name: Native dependency installation
 on:
   push:
-    branches: [main, codex/native-installer-tools]
+    branches: [main, codex/opencode-windows]
   pull_request:
 permissions:
   contents: read
