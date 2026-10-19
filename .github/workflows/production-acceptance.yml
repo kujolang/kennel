@@ -5,7 +5,7 @@ on:
       version:
         description: Existing published Kennel release tag
         required: true
-        default: v1.1.1
+        default: v1.2.0
 permissions:
   contents: read
 jobs:
@@ -22,9 +22,9 @@ jobs:
           ref: ${{ github.sha }} # Acceptance harness; client is installed from the public registry
       - name: Install published Kujo
         id: runtime
-        uses: kujolang/kujo/.github/actions/setup-kujo@fc53093f35e4236682bbbf5ab1ccc8d2b4df990c
+        uses: kujolang/kujo/.github/actions/setup-kujo@549bdb4d5aa8edc60a83c81bf3be4b1c688ad3e1
         with:
-          version: v1.6.0
+          version: v1.8.2
       - name: Verify public bootstrap and lifecycle
         env:
           KUJO_BIN: ${{ steps.runtime.outputs.kujo-path }}
