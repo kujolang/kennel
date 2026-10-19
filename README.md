@@ -291,3 +291,7 @@ The mutable registry homepage and getting-started pages recommend Kujo 1.8.2.
 Kennel retains its Kujo 1.4.0 minimum and macOS/Linux bootstrap scope.
 Regenerate with `scripts/registry/generate_registry.kujo`; runtime promotion
 does not change immutable package archives, exact metadata or provenance.
+
+Registry publication installs the checksum-verified Kujo 1.8.2 release using an
+immutable setup-action revision. The publisher source is independently pinned;
+consumer minimum versions and immutable package contents are unchanged.
