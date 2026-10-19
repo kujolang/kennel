@@ -284,3 +284,10 @@ Implementation layout:
 - Shared utility logic is implemented in `src/utils.kujo`; root `utils.kujo` is a compatibility shim
 - Entrypoint remains `kennel.kujo`
 - Shim consistency is enforced by `scripts/verify-kujo-native-direction.sh`
+
+### Registry runtime guidance
+
+The mutable registry homepage and getting-started pages recommend Kujo 1.8.2.
+Kennel retains its Kujo 1.4.0 minimum and macOS/Linux bootstrap scope.
+Regenerate with `scripts/registry/generate_registry.kujo`; runtime promotion
+does not change immutable package archives, exact metadata or provenance.
