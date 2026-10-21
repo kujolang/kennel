@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.2.1] - 2026-10-21
+
+- Align release metadata and verification with the current supported toolchain.
+
 ## [1.2.0] - 2026-10-14
 
 - Emit canonical registry directory URLs while preserving immutable historical packages.

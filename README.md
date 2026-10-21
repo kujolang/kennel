@@ -1,6 +1,6 @@
 # Kennel
 
-[![Version](https://img.shields.io/badge/version-1.2.0-black)](https://github.com/kujolang/kennel)
+[![Version](https://img.shields.io/badge/version-1.2.1-black)](https://github.com/kujolang/kennel)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 [![built with Kujo](https://img.shields.io/badge/built%20with-Kujo-white.svg)](https://github.com/kujolang/kujo)
 
@@ -13,7 +13,7 @@ Official first-party distribution is available through the versioned HTTPS proto
 **Runtime prerequisite:** install [Kujo 1.4.0](https://github.com/kujolang/kujo/releases/tag/v1.4.0) or newer. It provides isolated imports and the native package primitives required by Kennel. The installer rejects incompatible runtimes.
 
 
-Kennel **1.2.0** provides global commands and a per-user installer for macOS/Linux. To install from a reviewed source checkout, Git is required:
+Kennel **1.2.1** provides global commands and a per-user installer for macOS/Linux. To install from a reviewed source checkout, Git is required:
 
 ```bash
 "${KUJO_BIN:-kujo}" run scripts/install.kujo --interpreter -- --source .
@@ -143,7 +143,7 @@ Returned local paths remain declarations and carry `declaration_only: true`.
 They do not verify installed packages, lockfile integrity, trust policy or remote
 availability. Existing `validate_manifest`, `kennel validate`, add and install
 paths retain their filesystem checks. This source API is not yet in the released
-1.2.0 client.
+1.2.1 client.
 
 ## Trust Policy Configuration
 
