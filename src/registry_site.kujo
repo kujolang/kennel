@@ -94,7 +94,7 @@ func site_onboarding(source, root) {
 }
 export func site_generate(source, root) {
     site_copy(source + "/scripts/registry/assets", root + "/assets")
-    mut summaries := []; mut catalog := {}
+    mut summaries := []; mut catalog := {}; mut routes := ["", "getting-started"]
     if path_exists(dirname(root) + "/catalog.json") { catalog = json_file_read(dirname(root) + "/catalog.json", 1048576)["packages"] }
     if path_exists(root + "/packages") {
         for name in sort(list_dir(root + "/packages")) {
@@ -120,10 +120,10 @@ export func site_generate(source, root) {
             if type(description) != "string" || has_key(catalog, name) != 0 && trim(description) == "" { throw("Catalog description must be nonempty text") }
             mut summary := {"schema_version": 1, "name": name, "scope": null, "owner": latest["owner"], "official": true, "description": description, "latest": stable_version, "metadata_path": "packages/" + name + ".json"}
             mut rows := []; mut labels := []
-            for metadata in versions { rows = push(rows, {"version": metadata["version"], "metadata_url": "https://kennel.kujolang.ai/api/v1/packages/" + name + "/" + metadata["version"] + ".json", "archive_sha256": metadata["archive_sha256"], "yanked": false}); labels = push(labels, metadata["version"]); site_render_package(source, root, metadata, versions, name + "/" + metadata["version"]) }
+            for metadata in versions { rows = push(rows, {"version": metadata["version"], "metadata_url": "https://kennel.kujolang.ai/api/v1/packages/" + name + "/" + metadata["version"] + ".json", "archive_sha256": metadata["archive_sha256"], "yanked": false}); labels = push(labels, metadata["version"]); site_render_package(source, root, metadata, versions, name + "/" + metadata["version"]); routes = push(routes, name + "/" + metadata["version"]) }
             mut document := summary; document["versions"] = rows
             site_write(root + "/api/v1/packages/" + name + ".json", package_json(document)); summaries = push(summaries, summary)
-            latest["description"] = description; site_render_package(source, root, latest, versions, name)
+            latest["description"] = description; site_render_package(source, root, latest, versions, name); routes = push(routes, name)
             site_write(root + "/" + name + ".md", "# " + name + "\n\n" + description + "\n\nInstall: `kennel add " + name + "`\n\nLatest stable: " + stable_version + "\n\nVersions: " + join(labels, ", ") + "\n\nMetadata: https://kennel.kujolang.ai/api/v1/packages/" + name + ".json\n\nProvenance: " + latest["provenance_url"] + "\n\nArchive SHA-256: " + latest["archive_sha256"] + "\n\nDependencies: " + to_json(latest["dependencies"]) + "\n")
         }
     }
@@ -134,7 +134,10 @@ export func site_generate(source, root) {
     site_write(root + "/index.html", site_page(source, "Official Kujo packages", body, "", "Official released packages for Kujo."))
     for asset in ["style.css", "search.js", "_headers"] { site_write(root + "/" + asset, read_file(source + "/scripts/registry/site/" + asset)) }
     site_write(root + "/404.html", site_page(source, "Package not found", "<h1>Package not found.</h1><p><a href=\"/\">Browse official packages</a></p>", "", "Official released packages for Kujo."))
-    site_write(root + "/robots.txt", "User-agent: *\nAllow: /\n")
+    mut sitemap := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
+    for route in sort(routes) { sitemap = sitemap + "  <url><loc>" + site_escape("https://kennel.kujolang.ai/" + route) + "</loc></url>\n" }
+    site_write(root + "/sitemap.xml", sitemap + "</urlset>\n")
+    site_write(root + "/robots.txt", "User-agent: *\nAllow: /\nSitemap: https://kennel.kujolang.ai/sitemap.xml\n")
     site_onboarding(source, root)
     print(to_json({"packages": len(summaries), "index_bytes": file_size(root + "/api/v1/index.json")}))
 }
