@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kennel
-          ref: bfc1536722eb99484a17ff9fc15026b7089951f2
+          ref: 8a1aec7ec820101402d54c2510e1a398e60714d5
           path: publisher
           persist-credentials: false
       - name: Install checksum-verified Kujo 1.8.2
