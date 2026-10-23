@@ -16,7 +16,7 @@ Official first-party distribution is available through the versioned HTTPS proto
 Kennel **1.2.1** provides global commands and a per-user installer for macOS/Linux. To install from a reviewed source checkout, Git is required:
 
 ```bash
-"${KUJO_BIN:-kujo}" run scripts/install.kujo --interpreter -- --source .
+"${KUJO_BIN:-kujo}" run scripts/install.kujo -- --source .
 . "$HOME/.kennel/env"
 kennel --version
 kennel tool install shipcheck
@@ -44,7 +44,7 @@ kennel info changebucket
 kennel search change
 ```
 
-The CLI form is also available as `kujo run /path/to/kennel/kennel.kujo --interpreter -- add changebucket --project-dir /path/to/demo`. No GitHub URL or login is needed by consumers. Downloads, provenance and cache bytes are verified before staged archive replacement. Exact versions and digests are locked using additive schema-1 fields.
+The CLI form is also available as `kujo run /path/to/kennel/kennel.kujo -- add changebucket --project-dir /path/to/demo`. No GitHub URL or login is needed by consumers. Downloads, provenance and cache bytes are verified before staged archive replacement. Exact versions and digests are locked using additive schema-1 fields.
 
 The built-in registry is used when no explicit registry or project `index.json` exists. Set `[registry].index = "https://your-registry.example/api/v1/index.json"` to override it. Existing file/Git dependencies, local static indexes and local hosted auth/publish commands retain their behavior. Official names are unscoped; future third-party identities use `@scope/name`, with publishing still unavailable.
 
@@ -125,12 +125,12 @@ It should not yet be presented as a universal enterprise package ecosystem. The 
 
 ```bash
 cd /path/to/kujolang/kennel
-kujo run kennel.kujo --interpreter -- help
+kujo run kennel.kujo -- help
 
-kujo run kennel.kujo --interpreter -- init --name kennel-demo
-kujo run kennel.kujo --interpreter -- add file:../some-local-package --alias some-local-package
-kujo run kennel.kujo --interpreter -- install
-kujo run kennel.kujo --interpreter -- validate
+kujo run kennel.kujo -- init --name kennel-demo
+kujo run kennel.kujo -- add file:../some-local-package --alias some-local-package
+kujo run kennel.kujo -- install
+kujo run kennel.kujo -- validate
 ```
 
 ## Declaration-only inspection (unreleased)

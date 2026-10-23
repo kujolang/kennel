@@ -27,15 +27,15 @@ Review/merge runtime, client, then registry delivery. A registry merge deploys t
 ```sh
 export KUJO_BIN=/absolute/compatible/kujo
 export KUJO_MODULE_PATH="$PWD"
-"$KUJO_BIN" run scripts/install.kujo --interpreter --isolated-imports -- --source . --home /absolute/review-home --no-modify-path
+"$KUJO_BIN" run scripts/install.kujo --isolated-imports -- --source . --home /absolute/review-home --no-modify-path
 /absolute/review-home/bin/kennel --version
 /absolute/review-home/bin/kennel tool install shipcheck
 /absolute/review-home/bin/shipcheck --help
 bash scripts/verify-global-tools.sh
 bash scripts/verify-registry-packages.sh
 bash scripts/verify-profiles.sh full
-"$KUJO_BIN" run scripts/registry/production_e2e.kujo --interpreter --isolated-imports
-"$KUJO_BIN" run scripts/registry/global_tools_production_e2e.kujo --interpreter --isolated-imports
+"$KUJO_BIN" run scripts/registry/production_e2e.kujo --isolated-imports
+"$KUJO_BIN" run scripts/registry/global_tools_production_e2e.kujo --isolated-imports
 ```
 
 Current verification receipts belong in the review PRs and handoff; a local partial run is never a substitute for clean full CI. The native test suites cover profile preservation, exact arguments/cwd, conflicting caller modules, lifecycle, ownership, obsolete shim removal, failed activation rollback, deterministic archives, immutable publication and integrity failures. The original registry regression suite now calls the native builder while generating independent hostile archives.

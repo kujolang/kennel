@@ -10,7 +10,7 @@ Version: 1.2.1. Previously published releases remain immutable. macOS and Linux 
 Build the updated Kujo checkout with `cargo build --release --bin kujo`, then export `KUJO_BIN=/absolute/path/to/kujo/target/release/kujo`. From this Kennel checkout:
 
 ```sh
-"${KUJO_BIN:-kujo}" run scripts/install.kujo --interpreter -- --source .
+"${KUJO_BIN:-kujo}" run scripts/install.kujo -- --source .
 . "$HOME/.kennel/env"
 kennel --version
 kennel tool install shipcheck

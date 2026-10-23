@@ -59,7 +59,7 @@ excludes = [".git", "kennel_packages", "dist", "build", "node_modules"]
 Run:
 
 ```bash
-kujo run kennel.kujo --interpreter -- validate --project-dir /path/to/project
+kujo run kennel.kujo -- validate --project-dir /path/to/project
 ```
 
 ## 6. Publish Readiness (Future)

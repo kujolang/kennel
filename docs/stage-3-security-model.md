@@ -15,13 +15,13 @@ Preferred login forms:
 
 ```bash
 # preferred: token file avoids shell-history leakage
-kujo run kennel.kujo --interpreter -- login \
+kujo run kennel.kujo -- login \
 	--token-file ~/.kennel/token.txt \
 	--registry hosted-registry \
 	--user alice
 
 # supported: direct token value (use with caution)
-kujo run kennel.kujo --interpreter -- login \
+kujo run kennel.kujo -- login \
 	--token YOUR_TOKEN \
 	--registry hosted-registry \
 	--user alice
@@ -57,7 +57,7 @@ Operational rules:
 Use private visibility for restricted packages:
 
 ```bash
-kujo run kennel.kujo --interpreter -- publish \
+kujo run kennel.kujo -- publish \
 	--private \
 	--registry hosted-registry \
 	--user alice \
@@ -68,8 +68,8 @@ kujo run kennel.kujo --interpreter -- publish \
 Visibility transitions:
 
 ```bash
-kujo run kennel.kujo --interpreter -- visibility <package> private --registry hosted-registry --user alice --store-path ~/.kennel/tokens.json --registry-dir .kennel_registry
-kujo run kennel.kujo --interpreter -- visibility <package> public  --registry hosted-registry --user alice --store-path ~/.kennel/tokens.json --registry-dir .kennel_registry
+kujo run kennel.kujo -- visibility <package> private --registry hosted-registry --user alice --store-path ~/.kennel/tokens.json --registry-dir .kennel_registry
+kujo run kennel.kujo -- visibility <package> public  --registry hosted-registry --user alice --store-path ~/.kennel/tokens.json --registry-dir .kennel_registry
 ```
 
 ## Permission Boundaries

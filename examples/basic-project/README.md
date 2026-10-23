@@ -5,7 +5,7 @@ Canonical minimal Kujo project showing a Kennel-compatible `kennel.toml`.
 Run:
 
 ```bash
-kujo run main.kujo --interpreter
+kujo run main.kujo
 ```
 
 Expected output:

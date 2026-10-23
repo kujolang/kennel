@@ -61,8 +61,8 @@ Commands:
 
 ```bash
 bash ./scripts/verify-multi-registry-fallback.sh
-kujo run kennel.kujo --interpreter -- search example-package
-kujo run kennel.kujo --interpreter -- info example-package
+kujo run kennel.kujo -- search example-package
+kujo run kennel.kujo -- info example-package
 ```
 
 ## Organization Policy Templates
@@ -130,9 +130,9 @@ jobs:
 Commands:
 
 ```bash
-kujo run kennel.kujo --interpreter -- init --name my-service
-kujo run kennel.kujo --interpreter -- add github:kujolang/ai-sdk@main
-kujo run kennel.kujo --interpreter -- install
+kujo run kennel.kujo -- init --name my-service
+kujo run kennel.kujo -- add github:kujolang/ai-sdk@main
+kujo run kennel.kujo -- install
 bash ./scripts/verify-profiles.sh core
 ```
 
@@ -211,8 +211,8 @@ Commands:
 
 ```bash
 bash ./scripts/verify-multi-registry-fallback.sh
-kujo run kennel.kujo --interpreter -- search mirror
-kujo run kennel.kujo --interpreter -- info mirror-demo
+kujo run kennel.kujo -- search mirror
+kujo run kennel.kujo -- info mirror-demo
 ```
 
 ## Adoption Checklist
