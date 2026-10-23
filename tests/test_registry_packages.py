@@ -8,6 +8,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts/registry'))
 from native_registry_bridge import build, publish, digest, canonical, generate
@@ -54,6 +55,21 @@ class RegistryTests(unittest.TestCase):
         m,a=self.build();root=self.root/'registry';self.assertTrue(publish(root,m,a));self.assertFalse(publish(root,m,a));generate(root)
         changed=dict(m,archive_sha256='0'*64)
         with self.assertRaisesRegex(ValueError,'mutation'):publish(root,changed,a)
+    def test_sitemap_lists_only_generated_human_pages_and_preserves_releases(self):
+        m,a=self.build();root=self.root/'registry';publish(root,m,a)
+        immutable={str(p.relative_to(root)):p.read_bytes() for p in root.rglob('*') if p.is_file()}
+        generate(root)
+        first=(root/'sitemap.xml').read_bytes()
+        urls=[n.text for n in ET.fromstring(first).findall('{*}url/{*}loc')]
+        self.assertEqual(urls,['https://kennel.kujolang.ai/','https://kennel.kujolang.ai/fixture','https://kennel.kujolang.ai/fixture/1.0.0','https://kennel.kujolang.ai/getting-started'])
+        for url in urls:
+            route=url.removeprefix('https://kennel.kujolang.ai/')
+            self.assertTrue((root/route/'index.html').is_file())
+        self.assertIn('Sitemap: https://kennel.kujolang.ai/sitemap.xml', (root/'robots.txt').read_text())
+        generate(root)
+        self.assertEqual(first,(root/'sitemap.xml').read_bytes())
+        for name,content in immutable.items(): self.assertEqual(content,(root/name).read_bytes())
+
     def test_unauthorized_repository_and_fake_release_fail(self):
         self.release['repository_id']=9
         with self.assertRaises(ValueError):self.build()
