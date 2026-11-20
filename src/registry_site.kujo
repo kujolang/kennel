@@ -54,7 +54,7 @@ func site_versions(rows) {
         if added == false { next_rows = push(next_rows, row) }; sorted_rows = next_rows
     }; return sorted_rows
 }
-func site_render_package(source, root, metadata, versions, route) {
+func site_render_package(source, root, metadata, versions, route, documentation_url) {
     mut name := metadata["package"]; mut version := metadata["version"]; mut exact := route != name
     mut links := []
     for release in versions { links = push(links, "<a href=\"/" + name + "/" + release["version"] + "\">" + release["version"] + "</a>") }
@@ -65,6 +65,9 @@ func site_render_package(source, root, metadata, versions, route) {
     mut trail := ""; if exact { trail = " / " + version }
     mut dependencies := "No package dependencies."; if len(keys(metadata["dependencies"])) > 0 { dependencies = site_escape(to_json_pretty(metadata["dependencies"])) }
     mut body := "<p class=\"eyebrow\"><a href=\"/\">Packages</a> / " + name + trail + "</p><h1>" + name + "</h1><span class=\"badge\">Official · kujolang</span><p class=\"intro\">" + site_escape(metadata["description"]) + "</p><code class=\"command\">" + command + "</code><div class=\"detail\"><section><h2>Release " + version + "</h2><p><a href=\"" + site_escape(metadata["archive_url"]) + "\">Download package.tar.gz</a> · <a href=\"/api/v1/packages/" + name + "/" + version + ".json\">Exact release JSON</a> · <a href=\"/" + name + ".md\">Markdown</a></p><h2>Versions</h2><p>" + join(links, " · ") + "</p><h2>Dependencies</h2><pre>" + dependencies + "</pre><h2>Provenance</h2><p>Release identity and archive digest are recorded in the <a href=\"" + site_escape(metadata["provenance_url"]) + "\">publishing statement</a>. The registry is the trust authority; this statement is not an independent signature.</p><p>Source project: <a href=\"https://github.com/" + site_escape(metadata["repository"]) + "\">" + site_escape(metadata["repository"]) + "</a> · release ID " + to_string(metadata["release_id"]) + "</p></section><aside><h2>Package details</h2><dl>" + info + "</dl><p><a href=\"" + site_escape(metadata["checksum_url"]) + "\">Checksum file</a></p></aside></div>"
+    if documentation_url != "" {
+        body = body + "<p><a href=\"" + site_escape(documentation_url) + "\">Read the setup guide</a></p>"
+    }
     mut title := name; if exact { title = title + " " + version }
     site_write(root + "/" + route + "/index.html", site_page(source, title, body, route, metadata["description"]))
 }
@@ -116,14 +119,17 @@ export func site_generate(source, root) {
             versions = site_versions(versions); if len(versions) == 0 { continue }
             mut stable := []; for metadata in versions { if index_of(metadata["version"], "-") < 0 { stable = push(stable, metadata) } }
             mut latest := versions[0]; mut stable_version := ""; if len(stable) > 0 { latest = stable[0]; stable_version = latest["version"] }
-            mut description := dict_get_or(dict_get_or(catalog, name, {}), "description", latest["description"])
+            mut entry := dict_get_or(catalog, name, {})
+            mut description := dict_get_or(entry, "description", latest["description"])
+            mut documentation_url := dict_get_or(entry, "documentation_url", "")
+            if type(documentation_url) != "string" || (documentation_url != "" && regex_match(documentation_url, "^https://docs[.]kujolang[.]ai/[a-zA-Z0-9/_#.-]+$") == false) { throw("Catalog documentation URL must identify a Kujo documentation page") }
             if type(description) != "string" || has_key(catalog, name) != 0 && trim(description) == "" { throw("Catalog description must be nonempty text") }
             mut summary := {"schema_version": 1, "name": name, "scope": null, "owner": latest["owner"], "official": true, "description": description, "latest": stable_version, "metadata_path": "packages/" + name + ".json"}
             mut rows := []; mut labels := []
-            for metadata in versions { rows = push(rows, {"version": metadata["version"], "metadata_url": "https://kennel.kujolang.ai/api/v1/packages/" + name + "/" + metadata["version"] + ".json", "archive_sha256": metadata["archive_sha256"], "yanked": false}); labels = push(labels, metadata["version"]); site_render_package(source, root, metadata, versions, name + "/" + metadata["version"]); routes = push(routes, name + "/" + metadata["version"]) }
+            for metadata in versions { rows = push(rows, {"version": metadata["version"], "metadata_url": "https://kennel.kujolang.ai/api/v1/packages/" + name + "/" + metadata["version"] + ".json", "archive_sha256": metadata["archive_sha256"], "yanked": false}); labels = push(labels, metadata["version"]); site_render_package(source, root, metadata, versions, name + "/" + metadata["version"], ""); routes = push(routes, name + "/" + metadata["version"]) }
             mut document := summary; document["versions"] = rows
             site_write(root + "/api/v1/packages/" + name + ".json", package_json(document)); summaries = push(summaries, summary)
-            latest["description"] = description; site_render_package(source, root, latest, versions, name); routes = push(routes, name)
+            latest["description"] = description; site_render_package(source, root, latest, versions, name, documentation_url); routes = push(routes, name)
             site_write(root + "/" + name + ".md", "# " + name + "\n\n" + description + "\n\nInstall: `kennel add " + name + "`\n\nLatest stable: " + stable_version + "\n\nVersions: " + join(labels, ", ") + "\n\nMetadata: https://kennel.kujolang.ai/api/v1/packages/" + name + ".json\n\nProvenance: " + latest["provenance_url"] + "\n\nArchive SHA-256: " + latest["archive_sha256"] + "\n\nDependencies: " + to_json(latest["dependencies"]) + "\n")
         }
     }
