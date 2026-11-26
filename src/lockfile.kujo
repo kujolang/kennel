@@ -1,4 +1,4 @@
-from src.utils import dict_get_or, insert_sorted_by_name, write_text_atomic
+from src.utils import dict_get_or, write_text_atomic
 
 LOCKFILE_FILENAME := "kennel.lock"
 LOCKFILE_VERSION := 1
@@ -57,9 +57,16 @@ func save_lockfile(cwd, lockfile_obj) {
 }
 
 func set_packages(lockfile_obj, packages) {
-	sorted := []
+	by_name := {}
 	for pkg in packages {
-		sorted := insert_sorted_by_name(sorted, pkg)
+		name := to_lower(to_string(dict_get_or(pkg, "name", "")))
+		by_name[name] := push(dict_get_or(by_name, name, []), pkg)
+	}
+	sorted := []
+	for name in sort(keys(by_name)) {
+		for pkg in by_name[name] {
+			sorted = push(sorted, pkg)
+		}
 	}
 	lockfile := lockfile_obj
 	lockfile["package"] := sorted
