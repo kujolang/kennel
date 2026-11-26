@@ -151,6 +151,7 @@ jobs:
           bash ./scripts/verify-cli-messages.sh
           bash ./scripts/verify-git-diagnostics.sh
           bash ./scripts/verify-pinned-refs.sh
+          bash ./scripts/verify-git-commit-resolution.sh
           bash ./scripts/verify-stale-lockfile.sh
           bash ./scripts/verify-deterministic-lockfile.sh
           bash ./scripts/verify-kujo-native-direction.sh

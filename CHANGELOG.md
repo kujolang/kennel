@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Lock annotated Git tags and semver selections to their checkout commit.
+  Semver installs try a shallow clone and verify its commit before use.
+
 - Use native sort for lockfile package ordering and preserve input order for names that differ only by case.
 - Continue searching configured registry mirrors when an index cannot be read. Print the first error when no index can be searched.
 - Confine static package metadata reads to the configured index directory using the runtime's rooted file reader.

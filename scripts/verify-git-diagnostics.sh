@@ -14,10 +14,10 @@ mkdir -p "$TMP_DIR/bin"
 cat >"$TMP_DIR/bin/git" <<'GIT'
 #!/usr/bin/env bash
 case "$*" in
-  "ls-remote https://github.com/fixture/missing.git main")
+  "ls-remote -- https://github.com/fixture/missing.git main main^{}")
     echo 'remote: Repository not found.' >&2
     exit 128 ;;
-  "ls-remote https://github.com/fixture/existing.git ref-that-does-not-exist")
+  "ls-remote -- https://github.com/fixture/existing.git ref-that-does-not-exist ref-that-does-not-exist^{}")
     exit 0 ;;
   *) echo 'unexpected git command in diagnostics fixture' >&2; exit 99 ;;
 esac

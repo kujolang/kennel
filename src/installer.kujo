@@ -171,7 +171,7 @@ func remove_path(path) {
 	return false
 }
 
-func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
+func clone_git_package(url, resolved_ref, resolved_commit, install_path, prefer_shallow) {
 	if is_safe_install_path(install_path) == false {
 		return {
 			"ok": false,
@@ -185,24 +185,45 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
 			"error": "Failed to clear existing install directory: " + install_path
 		}
 	}
-	clone_cmd := "git clone " + shell_quote(url) + " " + shell_quote(install_path)
-	if resolved_ref != "" && resolved_ref != "HEAD" && resolved_commit == "" {
-		clone_cmd := "git clone --depth 1 --branch " + shell_quote(resolved_ref) + " " + shell_quote(url) + " " + shell_quote(install_path)
+	clone_args := " -- " + shell_quote(url) + " " + shell_quote(install_path)
+	clone_ok := false
+	checked_commit := ""
+	if resolved_ref != "" && resolved_ref != "HEAD" && (resolved_commit == "" || prefer_shallow) {
+		shallow := run_shell("git clone --depth 1 --branch " + shell_quote(resolved_ref) + clone_args)
+		clone_ok = command_ok(shallow)
+		if clone_ok == false && resolved_commit == "" {
+			return replacement_failure(install_path, displacement, "Failed to clone " + url + ": " + trim(shallow.stderr))
+		}
+		if clone_ok && resolved_commit != "" {
+			head := run_shell("git -C " + shell_quote(install_path) + " rev-parse HEAD")
+			clone_ok = command_ok(head) && trim(head.stdout) == resolved_commit
+			if clone_ok {
+				checked_commit = resolved_commit
+			}
+		}
+		if clone_ok == false && remove_path(install_path) == false {
+			return replacement_failure(install_path, displacement, "Failed to clear incomplete clone: " + install_path)
+		}
 	}
-	clone_result := run_shell(clone_cmd)
-	if command_ok(clone_result) == false {
-		return replacement_failure(install_path, displacement, "Failed to clone " + url + ": " + trim(clone_result.stderr))
+	if clone_ok == false {
+		clone_result := run_shell("git clone" + clone_args)
+		if command_ok(clone_result) == false {
+			return replacement_failure(install_path, displacement, "Failed to clone " + url + ": " + trim(clone_result.stderr))
+		}
 	}
-	if resolved_commit != "" {
+	if resolved_commit != "" && checked_commit == "" {
 		checkout_cmd := "git -C " + shell_quote(install_path) + " checkout " + shell_quote(resolved_commit)
 		checkout_result := run_shell(checkout_cmd)
 		if command_ok(checkout_result) == false {
 			return replacement_failure(install_path, displacement, "Failed to checkout commit " + resolved_commit + ": " + trim(checkout_result.stderr))
 		}
 	}
-	rev_parse := run_shell("git -C " + shell_quote(install_path) + " rev-parse HEAD")
-	if command_ok(rev_parse) == false {
-		return replacement_failure(install_path, displacement, "Failed to read resolved commit for " + url)
+	if checked_commit == "" {
+		rev_parse := run_shell("git -C " + shell_quote(install_path) + " rev-parse HEAD")
+		if command_ok(rev_parse) == false {
+			return replacement_failure(install_path, displacement, "Failed to read resolved commit for " + url)
+		}
+		checked_commit = trim(rev_parse.stdout)
 	}
 	finalized := finalize_replacement(install_path, displacement)
 	if finalized["ok"] == false {
@@ -210,7 +231,7 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path) {
 	}
 	return {
 		"ok": true,
-		"commit": trim(rev_parse.stdout)
+		"commit": checked_commit
 	}
 }
 
@@ -376,7 +397,8 @@ func install_resolved(cwd, resolved) {
 	if kind == "path" {
 		install_result := copy_local_package(resolved["path"], install_path)
 	} else {
-		install_result := clone_git_package(resolved["url"], resolved["resolved_ref"], resolved["resolved_commit"], install_path)
+		prefer_shallow := dict_get_or(resolved, "requested_kind", "") == "range"
+		install_result := clone_git_package(resolved["url"], resolved["resolved_ref"], resolved["resolved_commit"], install_path, prefer_shallow)
 	}
 	if install_result["ok"] == false {
 		return install_result

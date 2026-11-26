@@ -4,7 +4,7 @@ from src.utils import command_ok, dict_get_or, run_shell, shell_quote
 from src.semver import parse_semver_value, compare_semver, semver_satisfies_range
 
 func git_ls_remote_tags(url) {
-	cmd := "git ls-remote --tags --refs " + shell_quote(url)
+	cmd := "git ls-remote --tags -- " + shell_quote(url)
 	result := run_shell(cmd)
 	if command_ok(result) == false {
 		return {
@@ -14,6 +14,7 @@ func git_ls_remote_tags(url) {
 	}
 	lines := split(trim(to_string(result.stdout)), "\n")
 	tags := []
+	peeled := {}
 	for line in lines {
 		trimmed_line := trim(to_string(line))
 		if trimmed_line == "" {
@@ -25,7 +26,9 @@ func git_ls_remote_tags(url) {
 		}
 		commit := trim(to_string(parts[0]))
 		ref_name := trim(to_string(parts[1]))
-		if starts_with(ref_name, "refs/tags/") {
+		if ends_with(ref_name, "^{}") {
+			peeled[substring(ref_name, 0, len(ref_name) - 3)] := commit
+		} else if starts_with(ref_name, "refs/tags/") {
 			tags := push(tags, {
 				"tag": substring(ref_name, len("refs/tags/"), len(ref_name)),
 				"commit": commit
@@ -40,7 +43,8 @@ func git_ls_remote_tags(url) {
 	}
 	return {
 		"ok": true,
-		"tags": tags
+		"tags": tags,
+		"peeled": peeled
 	}
 }
 
@@ -74,7 +78,7 @@ func resolve_semver_range(url, range_expr) {
 	return {
 		"ok": true,
 		"tag": best_tag,
-		"commit": best_commit,
+		"commit": dict_get_or(tags_result["peeled"], "refs/tags/" + best_tag, best_commit),
 		"version": to_string(dict_get_or(best_version, "normalized", ""))
 	}
 }
@@ -95,7 +99,7 @@ func git_ls_remote(url, ref_name) {
 	if selector == "" {
 		selector := "HEAD"
 	}
-	cmd := "git ls-remote " + shell_quote(url) + " " + shell_quote(selector)
+	cmd := "git ls-remote -- " + shell_quote(url) + " " + shell_quote(selector) + " " + shell_quote(selector + "^{}")
 	result := run_shell(cmd)
 	if command_ok(result) == false {
 		return {
@@ -112,13 +116,23 @@ func git_ls_remote(url, ref_name) {
 	}
 	first := trim(lines[0])
 	parts := split(first, "\t")
-	if len(parts) < 1 {
+	if len(parts) < 2 {
 		return {
 			"ok": false,
 			"error": "Could not parse git ls-remote output for " + url
 		}
 	}
 	commit := trim(parts[0])
+	ref := trim(parts[1])
+	if starts_with(ref, "refs/tags/") {
+		for line in lines {
+			entry := split(trim(line), "\t")
+			if len(entry) == 2 && entry[1] == ref + "^{}" {
+				commit = trim(entry[0])
+				break
+			}
+		}
+	}
 	if commit == "" {
 		return {
 			"ok": false,
@@ -188,7 +202,7 @@ func resolve_dependency_with_policy(dep_name, parsed_spec, resolution_policy) {
 			return range_result
 		}
 		resolved["resolved_ref"] := to_string(dict_get_or(range_result, "tag", ""))
-		resolved["resolved_commit"] := ""
+		resolved["resolved_commit"] := range_result["commit"]
 		resolved["resolved_version"] := to_string(dict_get_or(range_result, "version", ""))
 		return {
 			"ok": true,

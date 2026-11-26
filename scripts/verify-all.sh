@@ -17,6 +17,7 @@ if [[ "$MODE" == "core" ]]; then
 	run_script "$ROOT_DIR/scripts/verify-cli-messages.sh"
 	run_script "$ROOT_DIR/scripts/verify-git-diagnostics.sh"
 	run_script "$ROOT_DIR/scripts/verify-pinned-refs.sh"
+	run_script "$ROOT_DIR/scripts/verify-git-commit-resolution.sh"
 	run_script "$ROOT_DIR/scripts/verify-stale-lockfile.sh"
 	run_script "$ROOT_DIR/scripts/verify-deterministic-lockfile.sh"
 	run_script "$ROOT_DIR/scripts/verify-transitive-resolution.sh"
