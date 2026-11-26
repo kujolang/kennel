@@ -95,7 +95,8 @@ func site_onboarding(source, root) {
     mut body := replace(read_file(source + "/scripts/registry/site/onboarding.html"), "{{notice}}", notice)
     site_write(root + "/getting-started/index.html", site_page(source, "Getting started", body, "getting-started", "Install Kennel, manage global Kujo tools, and add project dependencies."))
 }
-export func site_generate(source, root) {
+export func site_generate(source, output_root) {
+    mut root := path_absolute(output_root)
     site_copy(source + "/scripts/registry/assets", root + "/assets")
     mut summaries := []; mut catalog := {}; mut routes := ["", "getting-started"]
     if path_exists(dirname(root) + "/catalog.json") { catalog = json_file_read(dirname(root) + "/catalog.json", 1048576)["packages"] }
