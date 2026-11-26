@@ -347,7 +347,11 @@ func install_registry_package(cwd, resolved) {
 		if metadata["version"] != doc["version"] || metadata["name"] != doc["package"] || to_json(dict_get_or(metadata, "dependencies", {})) != to_json(doc["dependencies"]) { throw("Extracted package manifest mismatch") }
 		displacement := displace_install_path(install_path)
 		if displacement["ok"] == false { throw("Failed to displace registry installation") }
-		try { rename_file(staging, install_path) } except err { return replacement_failure(install_path, displacement, to_string(err)) }
+		try { rename_file(staging, install_path) } except err {
+			failure := replacement_failure(install_path, displacement, to_string(err))
+			if path_exists(staging) { delete_install_path(staging) }
+			return failure
+		}
 		finalized := finalize_replacement(install_path, displacement)
 		if finalized["ok"] == false { return finalized }
 		return {"ok": true, "resolved": resolved, "install_path": "kennel_packages/" + install_name, "version": doc["version"], "package_name": metadata["name"], "dependencies": doc["dependencies"], "repository": resolved["url"], "checksum": resolved["checksum"]}

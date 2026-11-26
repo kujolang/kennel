@@ -112,7 +112,7 @@ Detailed security behavior and command mappings are in `docs/stage-3-security-mo
 | Full transitive solver | Available | Deterministic graph install with conflict diagnostics for incompatible transitive specs |
 | Semver range solver | Available (optional) | Enable with `[policy.resolution].semver_ranges = true` for deterministic tag-based range selection |
 | Local hosted registry lifecycle | Available | Auth, publish, access, visibility, search/metadata APIs, and hosted install against local registry artifacts |
-| Multi-registry static index routing | Available | Configure `[registry].index` + `[registry].mirrors` for deterministic name-resolution fallback in `add`, `info`, and `search` |
+| Multi-registry static index routing | Available | Configure `[registry].index` and `[registry].mirrors`. Local index lookups traverse the configured order. `search` combines available indexes and keeps the first result for each package name. |
 | Operated public registry service | Deferred | Public discovery, hosted moderation, malware scanning, trust scoring, and registry operations at internet scale |
 
 ## Production Readiness Boundary

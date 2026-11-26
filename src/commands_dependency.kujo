@@ -432,12 +432,15 @@ func command_search(cwd, parsed_cli) {
 	}
 	combined_results := []
 	seen_names := {}
+	usable_index := false
+	first_error := ""
 	for index_path in lookup["paths"] {
 		index_loaded := load_static_index(index_path)
 		if index_loaded["ok"] == false {
-			print(index_loaded["error"])
-			exit(1)
+			if first_error == "" { first_error = index_loaded["error"] }
+			continue
 		}
+		usable_index = true
 		search_result := search_registry_index(query, {
 			"index": index_loaded["index"]
 		})
@@ -457,6 +460,10 @@ func command_search(cwd, parsed_cli) {
 			entry_with_source["index_path"] := index_path
 			combined_results = push(combined_results, entry_with_source)
 		}
+	}
+	if usable_index == false && first_error != "" {
+		print(first_error)
+		exit(1)
 	}
 	print("Search results for `" + query + "` across configured static indexes")
 	for entry in combined_results {

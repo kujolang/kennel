@@ -101,4 +101,17 @@ info_log="$PROJECT_DIR/info.log"
 "$KUJO_BIN" run "$KENNEL_SCRIPT" --interpreter -- info mirror-demo --project-dir "$PROJECT_DIR" >"$info_log" 2>&1
 grep -q '"name":"mirror-demo"' "$info_log"
 
+printf '{' > "$PRIMARY_INDEX"
+"$KUJO_BIN" run "$KENNEL_SCRIPT" --interpreter -- search mirror --project-dir "$PROJECT_DIR" >"$search_log" 2>&1
+grep -q 'mirror-demo | 0.1.0 | mirror-demo.metadata.json | '"$SECONDARY_INDEX" "$search_log"
+"$KUJO_BIN" run "$KENNEL_SCRIPT" --interpreter -- search unmatched --project-dir "$PROJECT_DIR" >"$search_log" 2>&1
+grep -q 'Search results for `unmatched` across configured static indexes' "$search_log"
+
+printf '[' > "$SECONDARY_INDEX"
+if "$KUJO_BIN" run "$KENNEL_SCRIPT" --interpreter -- search mirror --project-dir "$PROJECT_DIR" >"$search_log" 2>&1; then
+	echo 'Expected search to fail when every configured index is unreadable' >&2
+	exit 1
+fi
+grep -q 'Invalid static index JSON' "$search_log"
+
 echo "[verify-multi-registry-fallback] success"

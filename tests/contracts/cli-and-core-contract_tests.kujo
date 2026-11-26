@@ -227,6 +227,16 @@ test "static registry metadata paths cannot escape the index directory" {
 	assert_equal(absolute["ok"], false)
 	assert_true(index_of(to_string(absolute["error"]), "Invalid metadata_path") >= 0)
 
+	write_file(index_dir + "/inside.json", "{\"name\":\"inside\"}", true)
+	inside := load_registry_package_metadata(tmp_root, index_dir + "/index.json", "./inside.json")
+	assert_equal(inside["ok"], true)
+	assert_equal(inside["metadata"]["name"], "inside")
+
+	execute_status("ln -s '" + tmp_root + "/outside.json' '" + index_dir + "/linked.json'")
+	linked := load_registry_package_metadata(tmp_root, index_dir + "/index.json", "linked.json")
+	assert_equal(linked["ok"], false)
+	assert_true(index_of(to_string(linked["error"]), "Invalid metadata_path") >= 0)
+
 	execute_status("rm -rf '" + tmp_root + "'")
 }
 
@@ -325,6 +335,21 @@ test "lockfile package ordering is deterministic by name" {
 	updated := set_packages(lock, entries)
 	assert_equal(updated["package"][0]["name"], "alpha")
 	assert_equal(updated["package"][1]["name"], "zeta")
+}
+
+test "lockfile preserves the original order of equal case-folded names" {
+	entries := [
+		{"name": "Zoo", "sequence": 1},
+		{"name": "ALPHA", "sequence": 2},
+		{"name": "Alpha", "sequence": 3},
+		{"name": "apple", "sequence": 4},
+		{"sequence": 5},
+		{"name": "zoo", "sequence": 6}
+	]
+	updated := set_packages(empty_lockfile(), entries)
+	order := []
+	for entry in updated["package"] { order = push(order, entry["sequence"]) }
+	assert_equal(order, [5, 2, 3, 4, 1, 6])
 }
 
 test "installer rejects unsafe package install names before local copy" {

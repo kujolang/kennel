@@ -433,9 +433,8 @@ func load_static_index(index_path) {
 			return {"ok": true, "index": doc}
 		} except err { return {"ok": false, "error": to_string(err)} }
 	}
-	raw_json := read_file(index_path)
 	try {
-		parsed := parse_json(raw_json)
+		parsed := parse_json(read_file(index_path))
 		if type(parsed) != "dict" {
 			return error_result("Static index file must contain a JSON object: " + index_path, {
 				"operation": "load_static_index",
@@ -483,7 +482,9 @@ func resolve_metadata_file_path(cwd, index_path, metadata_path) {
 	index_dir := parent_dir_path(index_path)
 	from_index := path_absolute(index_dir + "/" + raw_metadata)
 	index_root := path_absolute(index_dir)
-	if starts_with(from_index, index_root + "/") == false {
+	index_prefix := index_root
+	if ends_with(index_prefix, "/") == false { index_prefix = index_prefix + "/" }
+	if from_index == index_root || starts_with(from_index, index_prefix) == false {
 		return error_result("Invalid metadata_path: resolved path escapes the static index directory.", {
 			"operation": "resolve_metadata_file_path",
 			"metadata_path": raw_metadata,
@@ -493,7 +494,9 @@ func resolve_metadata_file_path(cwd, index_path, metadata_path) {
 	}
 	return {
 		"ok": true,
-		"path": from_index
+		"path": from_index,
+		"root": index_root,
+		"relative": substring(from_index, len(index_prefix), len(from_index))
 	}
 }
 
@@ -513,7 +516,17 @@ func load_registry_package_metadata(cwd, index_path, metadata_path) {
 			"stage": "missing_metadata_file"
 		})
 	}
-	raw_metadata := read_file(metadata_file)
+	raw_metadata := ""
+	try {
+		raw_metadata = read_file_beneath(metadata_resolution["root"], metadata_resolution["relative"], 8388608)
+	} except err {
+		return error_result("Invalid metadata_path: " + to_string(err), {
+			"operation": "load_registry_package_metadata",
+			"index_path": index_path,
+			"resolved_metadata_path": metadata_file,
+			"stage": "read_metadata_file"
+		})
+	}
 	try {
 		parsed := parse_json(raw_metadata)
 		if type(parsed) != "dict" {
