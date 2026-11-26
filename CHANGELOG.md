@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Use native sort for lockfile package ordering and preserve input order for names that differ only by case.
+- Continue searching configured registry mirrors when an index cannot be read. Print the first error when no index can be searched.
+- Confine static package metadata reads to the configured index directory using the runtime's rooted file reader.
+- Remove incomplete registry install staging when the final rename fails.
+
 ## [1.2.1] - 2026-10-21
 
 - Align release metadata and verification with the current supported toolchain.
