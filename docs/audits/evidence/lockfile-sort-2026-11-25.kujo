@@ -1,0 +1,12 @@
+from src.lockfile import set_packages, packages
+n := to_int(args()[0])
+mut items := []
+i := n
+while i > 0 {
+    items = push(items, {"name": "Dependency-" + to_string(i), "ordinal": i})
+    i = i - 1
+}
+start := performance_now()
+result := packages(set_packages({}, items))
+elapsed := performance_now() - start
+print(to_json({"entries": len(result), "digest": sha256(to_json(result)), "operation_ms": elapsed}))
