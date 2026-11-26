@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: kujolang/kennel
-          ref: be06c7c6c7092b9a54c6db9c887bc3a0367fc136
+          ref: 71cbfd08abf2725d4df17fdfea3c7b6eeb836cd3
           path: publisher
           persist-credentials: false
       - name: Install checksum-verified Kujo 1.8.2
@@ -59,6 +59,6 @@ jobs:
             git commit -m 'Publish verified official package releases'
             git push origin HEAD:main
           fi
-      - name: Verify deployed package discovery
+      - name: Verify deployed discovery, pages, and archives
         run: |
           "$KUJO_BIN" run publisher/scripts/registry/verify_deployment.kujo --interpreter --isolated-imports -- registry-repo/registry
