@@ -101,6 +101,10 @@ The installed launcher supports `kennel --version`. Direct `kujo run kennel.kujo
 
 Detailed security behavior and command mappings are in `docs/stage-3-security-model.md`.
 
+For a locked Git dependency, Kennel tries a shallow fetch of the pinned commit.
+Git hosts that refuse direct object requests use the advertised history and
+still verify the checked-out commit.
+
 ## Capability Overview
 
 | Capability Area | Status | Notes |

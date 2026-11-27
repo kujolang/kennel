@@ -112,9 +112,48 @@ kennel install
 test "$(cat "$consumer/kennel_packages/annotated/version.txt")" = 'second fixture version'
 
 # A retired tag still has a reachable pinned commit. Locked replay can fall
-# back from the shallow tag clone to the reachable commit.
+# back from the shallow tag clone to a direct fetch of that commit.
 cp "$scratch/current.lock" "$consumer/kennel.lock"
 git -C "$source" tag -d v1.1.0 >/dev/null
 kennel install
 test "$(cat "$consumer/kennel_packages/range/version.txt")" = 'second fixture version'
+
+# An immutable revision can be installed without downloading its history.
+consumer="$scratch/pinned-consumer"
+mkdir "$consumer"
+kennel init --name pinned-consumer
+export GIT_TRACE2_EVENT="$scratch/exact-fetch.jsonl"
+kennel add "github:kennel-fixtures/annotated@$first_commit" --alias fixed
+unset GIT_TRACE2_EVENT
+python3 - "$scratch/exact-fetch.jsonl" "$first_commit" <<'PY'
+import json
+import pathlib
+import sys
+
+trace, commit = sys.argv[1:]
+commands = [record.get("argv", []) for record in map(json.loads, pathlib.Path(trace).read_text().splitlines())
+            if record["event"] == "start"]
+assert any("fetch" in command and "--depth" in command and commit in command for command in commands), commands
+assert not any("clone" in command for command in commands), commands
+PY
+test -f "$consumer/kennel_packages/fixed/kennel.toml"
+test ! -e "$consumer/kennel_packages/fixed/version.txt"
+cp "$consumer/kennel.lock" "$scratch/fixed.lock"
+
+# A host that refuses the direct object request can still serve the
+# reachable revision through the advertised history.
+export KENNEL_FIXTURE_GIT="$(command -v git)"
+mkdir "$scratch/ref-only"
+cat >"$scratch/ref-only/git" <<'SH'
+#!/usr/bin/env bash
+if [[ "${1:-}" == -C && "${3:-}" == fetch ]]; then
+    echo 'fixture: direct object fetch unavailable' >&2
+    exit 1
+fi
+exec "$KENNEL_FIXTURE_GIT" "$@"
+SH
+chmod +x "$scratch/ref-only/git"
+PATH="$scratch/ref-only:$PATH" kennel install
+cmp "$consumer/kennel.lock" "$scratch/fixed.lock"
+test ! -e "$consumer/kennel_packages/fixed/version.txt"
 echo '[verify-git-commit-resolution] success'

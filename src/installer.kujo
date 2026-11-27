@@ -186,6 +186,8 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path, prefer_
 		}
 	}
 	clone_args := " -- " + shell_quote(url) + " " + shell_quote(install_path)
+	git_in := "git -C " + shell_quote(install_path)
+	exact_pin := regex_match(resolved_commit, "^[0-9a-f]{40}$")
 	clone_ok := false
 	checked_commit := ""
 	if resolved_ref != "" && resolved_ref != "HEAD" && (resolved_commit == "" || prefer_shallow) {
@@ -195,7 +197,7 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path, prefer_
 			return replacement_failure(install_path, displacement, "Failed to clone " + url + ": " + trim(shallow.stderr))
 		}
 		if clone_ok && resolved_commit != "" {
-			head := run_shell("git -C " + shell_quote(install_path) + " rev-parse HEAD")
+			head := run_shell(git_in + " rev-parse HEAD")
 			clone_ok = command_ok(head) && trim(head.stdout) == resolved_commit
 			if clone_ok {
 				checked_commit = resolved_commit
@@ -205,25 +207,48 @@ func clone_git_package(url, resolved_ref, resolved_commit, install_path, prefer_
 			return replacement_failure(install_path, displacement, "Failed to clear incomplete clone: " + install_path)
 		}
 	}
+	if clone_ok == false && exact_pin {
+		initialized := run_shell("git init --quiet -- " + shell_quote(install_path))
+		if command_ok(initialized) == false {
+			return replacement_failure(install_path, displacement, "Failed to initialize checkout for " + url + ": " + trim(initialized.stderr))
+		}
+		fetched := run_shell(git_in + " fetch --depth 1 --no-tags -- " + shell_quote(url) + " " + shell_quote(resolved_commit))
+		clone_ok = command_ok(fetched)
+		# Some Git hosts disallow direct object requests. Retain the existing
+		# full-history fallback for commits reachable from their advertised refs.
+		if clone_ok == false && remove_path(install_path) == false {
+			return replacement_failure(install_path, displacement, "Failed to clear incomplete fetch: " + install_path)
+		}
+	}
 	if clone_ok == false {
-		clone_result := run_shell("git clone" + clone_args)
+		clone_cmd := "git clone"
+		if resolved_commit != "" { clone_cmd = clone_cmd + " --no-checkout" }
+		clone_result := run_shell(clone_cmd + clone_args)
 		if command_ok(clone_result) == false {
 			return replacement_failure(install_path, displacement, "Failed to clone " + url + ": " + trim(clone_result.stderr))
 		}
 	}
 	if resolved_commit != "" && checked_commit == "" {
-		checkout_cmd := "git -C " + shell_quote(install_path) + " checkout " + shell_quote(resolved_commit)
+		checkout_cmd := git_in + " checkout --detach " + shell_quote(resolved_commit)
 		checkout_result := run_shell(checkout_cmd)
 		if command_ok(checkout_result) == false {
 			return replacement_failure(install_path, displacement, "Failed to checkout commit " + resolved_commit + ": " + trim(checkout_result.stderr))
 		}
 	}
 	if checked_commit == "" {
-		rev_parse := run_shell("git -C " + shell_quote(install_path) + " rev-parse HEAD")
+		rev_parse := run_shell(git_in + " rev-parse HEAD")
 		if command_ok(rev_parse) == false {
 			return replacement_failure(install_path, displacement, "Failed to read resolved commit for " + url)
 		}
 		checked_commit = trim(rev_parse.stdout)
+	}
+	if exact_pin && checked_commit != resolved_commit {
+		# Earlier locks can contain the exact annotated tag object rather
+		# than its commit. Verify the checkout against that object's commit.
+		peeled := run_shell(git_in + " rev-parse --verify " + shell_quote(resolved_commit + "^{commit}"))
+		if command_ok(peeled) == false || trim(peeled.stdout) != checked_commit {
+			return replacement_failure(install_path, displacement, "Checked out commit does not match the pinned object for " + url)
+		}
 	}
 	finalized := finalize_replacement(install_path, displacement)
 	if finalized["ok"] == false {
