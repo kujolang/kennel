@@ -142,7 +142,8 @@ cp "$consumer/kennel.lock" "$scratch/fixed.lock"
 
 # A host that refuses the direct object request can still serve the
 # reachable revision through the advertised history.
-export KENNEL_FIXTURE_GIT="$(command -v git)"
+KENNEL_FIXTURE_GIT="$(command -v git)"
+export KENNEL_FIXTURE_GIT
 mkdir "$scratch/ref-only"
 cat >"$scratch/ref-only/git" <<'SH'
 #!/usr/bin/env bash
