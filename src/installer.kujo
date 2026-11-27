@@ -80,7 +80,7 @@ func displace_install_path(path) {
 	parent_dir := parent_dir_path(path)
 	trash_root := parent_dir + "/.kennel_installer_trash"
 	ensure_dir(trash_root)
-	trash_path := trash_root + "/" + path_basename(path) + "-" + to_string(now())
+	trash_path := trash_root + "/" + path_basename(path) + "-" + uuid_v4()
 	try {
 		rename_file(path, trash_path)
 		return {
